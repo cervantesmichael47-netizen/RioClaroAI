@@ -1,0 +1,35 @@
+[33m5b22845[m Initial commit - Rio Claro AI
+ .env.example                             |   37 [32m+[m
+ .gitignore                               |   17 [32m+[m
+ README.md                                |  256 [32m++++[m
+ package-lock.json                        | 2241 [32m++++++++++++++++++++++++++++++[m
+ package.json                             |   32 [32m+[m
+ public/app.js                            | 1406 [32m+++++++++++++++++++[m
+ public/escape.js                         |    9 [32m+[m
+ public/favicon.svg                       |    4 [32m+[m
+ public/icons.js                          |   53 [32m+[m
+ public/index.html                        |  238 [32m++++[m
+ public/styles.css                        |  769 [32m++++++++++[m
+ server.js                                |   95 [32m++[m
+ server/app.js                            | 1312 [32m+++++++++++++++++[m
+ server/assistant-instructions.js         |    9 [32m+[m
+ server/data/product-normalization.js     |   62 [32m+[m
+ server/data/sales.js                     |   98 [32m++[m
+ server/data/store.js                     | 1119 [32m+++++++++++++++[m
+ server/security/audit.js                 |   46 [32m+[m
+ server/security/auth.js                  |   88 [32m++[m
+ server/security/secrets.js               |   65 [32m+[m
+ server/services/document-intelligence.js |  173 [32m+++[m
+ server/services/foundry.js               |  311 [32m+++++[m
+ tests/chat-voice.test.js                 |   77 [32m+[m
+ tests/complaints-ui.test.js              |   27 [32m+[m
+ tests/complaints.test.js                 |  242 [32m++++[m
+ tests/document-intelligence.test.js      |   57 [32m+[m
+ tests/evaluation-mode.test.js            |  252 [32m++++[m
+ tests/foundry.integration.test.js        |   43 [32m+[m
+ tests/inventory.test.js                  |  273 [32m++++[m
+ tests/invoice-extraction.test.js         |   97 [32m++[m
+ tests/invoice-workflow.test.js           |  122 [32m++[m
+ tests/sales.test.js                      |  207 [32m+++[m
+ tests/security.test.js                   |  502 [32m+++++++[m
+ 33 files changed, 10339 insertions(+)
