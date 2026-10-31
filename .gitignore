@@ -1,0 +1,17 @@
+node_modules/
+.env
+.env.*
+!.env.example
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+*.log
+.DS_Store
+Thumbs.db
+server/data/rioclaro-data.json
+server/data/audit-log.json
+server/data/foundry-conversations.json
+server/data/*.tmp
+server/data/*.backup-*
+server/data/backups/
+server/data/*.backup-*

@@ -1,0 +1,252 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import request from 'supertest';
+
+process.env.RIOCLARO_DATA_FILE = ':memory:';
+process.env.NODE_ENV = 'test';
+
+const adminToken = 'evaluation-test-admin';
+const tokenVerifier = async (token) => {
+  if (token !== adminToken) throw new Error('Invalid test token.');
+  return { userId: 'evaluation-test-admin', roles: ['Administrator'], branch: null };
+};
+const auth = { Authorization: `Bearer ${adminToken}` };
+
+async function createApp(options = {}) {
+  const { createApp: factory } = await import('../server/app.js');
+  return factory({ tokenVerifier, ...options });
+}
+
+test('root serves the dashboard without cookies, login, or a profile picker', async () => {
+  const app = await createApp({ evaluationMode: true });
+  const page = await request(app).get('/').expect(200);
+  assert.match(page.text, /class="page-view active" id="page-inicio"/);
+  assert.match(page.text, /class="origin-select-label" hidden/);
+  for (const pageId of ['inventario', 'facturas', 'reclamaciones', 'asistente', 'documentacion', 'responsable', 'acerca']) {
+    assert.match(page.text, new RegExp(`id="page-${pageId}"`));
+  }
+  assert.match(page.text, /Proveedores y clientes/);
+  assert.match(page.text, /El dashboard incluye solo ventas sintéticas de demostración/);
+  assert.match(page.text, /id="chat-mic-button"/);
+  assert.match(page.text, /id="chat-input"[^]*id="chat-mic-button"/);
+  assert.doesNotMatch(page.text, /inventory-mic-button|inventory-query-input/);
+  assert.doesNotMatch(page.text, /Iniciar sesión|Entrar como evaluador|Selecciona un perfil|Crear cuenta/i);
+  assert.equal(page.headers['set-cookie'], undefined);
+});
+
+test('production evaluation mode refuses the default shared data file', async () => {
+  const previous = {
+    environment: process.env.NODE_ENV,
+    dataFile: process.env.RIOCLARO_DATA_FILE,
+    evaluationFile: process.env.RIOCLARO_EVALUATION_DATA_FILE,
+  };
+  process.env.NODE_ENV = 'production';
+  const defaultDataFile = path.resolve('server', 'data', 'rioclaro-data.json');
+  process.env.RIOCLARO_DATA_FILE = defaultDataFile;
+  process.env.RIOCLARO_EVALUATION_DATA_FILE = defaultDataFile;
+  try {
+    await assert.rejects(createApp({ evaluationMode: true }), /archivo de persistencia dedicado/);
+    process.env.RIOCLARO_DATA_FILE = ':memory:';
+    process.env.RIOCLARO_EVALUATION_DATA_FILE = path.join(path.dirname(defaultDataFile), 'evaluation.json');
+    await assert.rejects(createApp({ evaluationMode: true }), /archivo de persistencia dedicado/);
+  } finally {
+    for (const [key, value] of Object.entries({
+      NODE_ENV: previous.environment,
+      RIOCLARO_DATA_FILE: previous.dataFile,
+      RIOCLARO_EVALUATION_DATA_FILE: previous.evaluationFile,
+    })) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
+test('evaluation requests are pinned to synthetic practice data and cannot grant admin roles', async () => {
+  const normalApp = await createApp();
+  const operationalProduct = await request(normalApp).post('/api/products')
+    .set(auth)
+    .set('X-Data-Origin', 'operational')
+    .send({ name: 'Producto Operativo Privado', category: 'Evaluación', branch: 'Zapopan', stock: 7 })
+    .expect(201);
+  assert.equal(operationalProduct.body.origin, 'operational');
+
+  const evaluationApp = await createApp({ evaluationMode: true });
+  const status = await request(evaluationApp).get('/api/security/status').expect(200);
+  assert.equal(status.body.evaluationMode, true);
+
+  const products = await request(evaluationApp).get('/api/products')
+    .set('X-Data-Origin', 'operational').expect(200);
+  assert.equal(products.body.origin, 'practice');
+  assert.ok(products.body.items.every((product) => product.origin === 'practice'));
+  assert.ok(products.body.items.every((product) => product.name !== 'Producto Operativo Privado'));
+
+  const created = await request(evaluationApp).post('/api/products')
+    .set('X-Data-Origin', 'operational')
+    .send({
+      name: 'Producto Sintético del Evaluador',
+      category: 'Prueba',
+      branch: 'Zapopan',
+      stock: 3,
+      role: 'Administrator',
+    })
+    .expect(201);
+  assert.equal(created.body.origin, 'practice');
+
+  const confirmedOrigin = await request(evaluationApp).get('/api/products')
+    .set('X-Data-Origin', 'nonsense').expect(200);
+  assert.equal(confirmedOrigin.body.origin, 'practice');
+  assert.ok(confirmedOrigin.body.items.some((product) => product.normalizedName === 'producto sintetico del evaluador'));
+
+  await request(evaluationApp).post('/api/admin/ai-control').send({ enabled: false }).expect(401);
+  await request(evaluationApp).get('/api/admin/audit').expect(401);
+  await request(evaluationApp).post('/api/admin/practice/reset')
+    .send({ confirm: 'RESET_PRACTICE', role: 'Administrator' }).expect(401);
+
+  const operationalStillSeparate = await request(normalApp).get('/api/products')
+    .set(auth)
+    .set('X-Data-Origin', 'operational').expect(200);
+  assert.ok(operationalStillSeparate.body.items.some((product) => product.name === 'Producto Operativo Privado'));
+  assert.ok(operationalStillSeparate.body.items.every((product) => product.name !== 'Producto Sintético del Evaluador'));
+});
+
+test('evaluation complaints persist with their history and invoice writes stay in practice', async () => {
+  const evaluationApp = await createApp({ evaluationMode: true });
+  const created = await request(evaluationApp).post('/api/complaints')
+    .set('X-Data-Origin', 'operational')
+    .send({
+      branch: 'Zapopan',
+      customerName: 'Cliente sintético',
+      description: 'Caso de evaluación independiente.',
+      category: 'Prueba',
+    })
+    .expect(201);
+  assert.equal(created.body.origin, 'practice');
+
+  const updated = await request(evaluationApp).post(`/api/complaints/${created.body.item.id}/status`)
+    .set('X-Data-Origin', 'operational')
+    .send({ status: 'in_progress' }).expect(200);
+  assert.equal(updated.body.item.history.length, 2);
+  assert.equal(updated.body.item.history[1].actor, 'system');
+
+  const detail = await request(evaluationApp).get(`/api/complaints/${created.body.item.id}`)
+    .set('X-Data-Origin', 'operational').expect(200);
+  assert.equal(detail.body.item.origin, 'practice');
+  assert.equal(detail.body.item.history.length, 2);
+
+  const invoice = await request(evaluationApp).post('/api/invoices')
+    .set('X-Data-Origin', 'operational')
+    .send({
+      supplier: 'Proveedor sintético',
+      reference: 'EVAL-2026-001',
+      date: '2026-10-29',
+      amount: 25,
+    })
+    .expect(201);
+  assert.equal(invoice.body.origin, 'practice');
+  assert.equal((await request(evaluationApp).get('/api/invoices').expect(200)).body.origin, 'practice');
+});
+
+test('evaluation complaint data survives a server restart in its dedicated files', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'rioclaro-evaluation-'));
+  const dataFile = path.join(directory, 'evaluation-data.json');
+  const auditFile = path.join(directory, 'evaluation-audit.json');
+  const conversationsFile = path.join(directory, 'evaluation-conversations.json');
+  const childScript = [
+    "const { createApp } = await import('./server/app.js');",
+    "const request = (await import('supertest')).default;",
+    'const app = createApp();',
+    "if (process.env.EVAL_TEST_ACTION === 'create') {",
+    "  const response = await request(app).post('/api/complaints').set('X-Data-Origin', 'operational').send({",
+    "    branch: 'Zapopan', customerName: 'Cliente de persistencia', description: 'Caso sintético persistente.', category: 'Prueba'",
+    '  });',
+    '  if (response.status !== 201) throw new Error(JSON.stringify(response.body));',
+    '  console.log(JSON.stringify({ id: response.body.item.id, origin: response.body.origin }));',
+    '} else {',
+    "  const response = await request(app).get('/api/complaints?branch=Zapopan').set('X-Data-Origin', 'operational');",
+    '  if (response.status !== 200) throw new Error(JSON.stringify(response.body));',
+    "  const item = response.body.items.find((complaint) => complaint.customerName === 'Cliente de persistencia');",
+    '  if (!item) throw new Error("Persisted evaluation complaint was not found.");',
+    '  console.log(JSON.stringify({ origin: response.body.origin, status: item.status, history: item.history.length }));',
+    '}',
+  ].join('\n');
+  const run = (action) => spawnSync(process.execPath, ['--input-type=module', '-e', childScript], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      NODE_ENV: 'test',
+      RIOCLARO_EVALUATION_MODE: 'true',
+      RIOCLARO_DATA_FILE: dataFile,
+      RIOCLARO_EVALUATION_DATA_FILE: dataFile,
+      RIOCLARO_AUDIT_FILE: auditFile,
+      RIOCLARO_EVALUATION_AUDIT_FILE: auditFile,
+      FOUNDRY_CONVERSATIONS_FILE: conversationsFile,
+      RIOCLARO_EVALUATION_CONVERSATIONS_FILE: conversationsFile,
+      EVAL_TEST_ACTION: action,
+    },
+  });
+  try {
+    const created = run('create');
+    assert.equal(created.status, 0, created.stderr || created.stdout);
+    assert.equal(JSON.parse(created.stdout).origin, 'practice');
+
+    const restored = run('read');
+    assert.equal(restored.status, 0, restored.stderr || restored.stdout);
+    assert.deepEqual(JSON.parse(restored.stdout), {
+      origin: 'practice',
+      status: 'pending',
+      history: 1,
+    });
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('Foundry receives only practice inventory in evaluation mode', async () => {
+  const previous = {
+    enabled: process.env.FOUNDRY_ENABLED,
+    endpoint: process.env.FOUNDRY_PROJECT_ENDPOINT,
+    agent: process.env.FOUNDRY_AGENT_NAME,
+    suspended: process.env.FOUNDRY_SUSPENDED,
+  };
+  process.env.FOUNDRY_ENABLED = 'true';
+  process.env.FOUNDRY_PROJECT_ENDPOINT = 'https://rioclaro.services.ai.azure.com/api/projects/evaluation';
+  process.env.FOUNDRY_AGENT_NAME = 'RioClaroAssistant';
+  delete process.env.FOUNDRY_SUSPENDED;
+  const received = [];
+  try {
+    const normalApp = await createApp();
+    await request(normalApp).post('/api/products').set(auth).set('X-Data-Origin', 'operational')
+      .send({ name: 'Producto Privado No Compartir', category: 'Privada', branch: 'Zapopan', stock: 1 })
+      .expect(201);
+    const evaluationApp = await createApp({
+      evaluationMode: true,
+      foundryClient: async (_message, options) => {
+        received.push(options.applicationContext);
+        return { answer: 'Respuesta de prueba.', sources: [] };
+      },
+    });
+    await request(evaluationApp).post('/api/chat')
+      .set('X-Data-Origin', 'operational')
+      .set('X-Chat-Session', '825cb746-6e65-4e31-b9f3-52f5aac1d762')
+      .send({ message: '¿Qué productos sintéticos hay?' })
+      .expect(200);
+    assert.equal(received[0].origin, 'practice');
+    assert.ok(received[0].inventory.records.every((product) => product.origin === undefined || product.origin === 'practice'));
+    assert.ok(!JSON.stringify(received[0]).includes('Producto Privado No Compartir'));
+  } finally {
+    for (const [key, value] of Object.entries({
+      FOUNDRY_ENABLED: previous.enabled,
+      FOUNDRY_PROJECT_ENDPOINT: previous.endpoint,
+      FOUNDRY_AGENT_NAME: previous.agent,
+      FOUNDRY_SUSPENDED: previous.suspended,
+    })) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});

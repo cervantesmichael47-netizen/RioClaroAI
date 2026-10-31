@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#F5FAF6">
+    <meta name="description" content="Río Claro AI: inteligencia operativa para conectar información, análisis y decisiones.">
+    <title>Río Claro AI · Inteligencia operativa</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="stylesheet" href="/styles.css">
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        <a class="brand" href="#inicio" aria-label="Río Claro AI, ir al inicio">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 40 40" fill="none">
+              <path d="M7 12h10l5 8h11M7 28h10l5-8" />
+              <circle cx="7" cy="12" r="2.5" />
+              <circle cx="7" cy="28" r="2.5" />
+              <circle cx="33" cy="20" r="2.5" />
+            </svg>
+          </span>
+          <span class="brand-copy"><strong>RÍO CLARO AI</strong><small>INTELIGENCIA OPERATIVA</small></span>
+        </a>
+
+        <div class="nav-label">ESPACIO DE TRABAJO</div>
+        <nav class="main-nav" aria-label="Navegación principal">
+          <a href="#inicio" class="nav-link active" data-page="inicio"><i data-lucide="layout-dashboard"></i><span>Inicio</span></a>
+          <a href="#inventario" class="nav-link" data-page="inventario"><i data-lucide="boxes"></i><span>Inventario inteligente</span></a>
+          <a href="#facturas" class="nav-link" data-page="facturas"><i data-lucide="file-check-2"></i><span>Revisión de facturas</span></a>
+          <a href="#reclamaciones" class="nav-link" data-page="reclamaciones"><i data-lucide="messages-square"></i><span>Atención de reclamaciones</span></a>
+          <a href="#asistente" class="nav-link" data-page="asistente"><i data-lucide="message-circle"></i><span>Asistente IA</span><span class="nav-dot" aria-hidden="true"></span></a>
+          <span class="nav-divider" aria-hidden="true"></span>
+          <a href="#documentacion" class="nav-link" data-page="documentacion"><i data-lucide="book-open"></i><span>Documentación</span></a>
+          <a href="#responsable" class="nav-link" data-page="responsable"><i data-lucide="shield-check"></i><span>IA responsable</span></a>
+          <a href="#acerca" class="nav-link" data-page="acerca"><i data-lucide="info"></i><span>Acerca del proyecto</span></a>
+        </nav>
+
+        <div class="sidebar-bottom">
+          <div class="sidebar-note"><i data-lucide="shield-check"></i><p>Información para apoyar decisiones, con supervisión humana.</p></div>
+          <div class="sidebar-connections" aria-label="Estado de conexiones">
+            <div class="connection-line" id="sidebar-backend-status"><span class="connection-dot pending"></span><span>Backend · verificando</span></div>
+            <div class="connection-line" id="sidebar-foundry-status"><span class="connection-dot pending"></span><span>Foundry · sin verificar</span></div>
+          </div>
+          <div class="author-signature"><span>Desarrollado por</span><strong>Rebollar Cervantes Michael Gabriel</strong></div>
+        </div>
+      </aside>
+
+      <div class="main-shell">
+        <header class="topbar">
+          <button class="icon-button mobile-menu" id="menu-button" aria-label="Abrir navegación" aria-expanded="false"><i data-lucide="menu"></i></button>
+          <div class="breadcrumb"><span>Río Claro AI</span><i data-lucide="chevron-right"></i><strong id="breadcrumb-current">Inicio</strong></div>
+          <div class="topbar-right">
+            <label class="origin-select-label" hidden><span class="sr-only">Conjunto de datos</span><select id="data-origin" aria-label="Conjunto de datos"><option value="practice">Práctica</option><option value="operational">Operación</option></select></label>
+            <span class="system-status" id="backend-status"><span class="status-pulse pending"></span> Backend · verificando</span>
+            <span class="topbar-divider"></span>
+            <span class="auth-pending" id="foundry-top-status">Foundry · sin verificar</span>
+          </div>
+        </header>
+
+        <main class="content">
+          <div class="security-banner" role="status"><i data-lucide="lock-keyhole"></i><span id="security-banner-text">La API controla el acceso a los datos y las operaciones en el servidor.</span></div>
+
+          <div class="page-view active" id="page-inicio" data-title="Inicio">
+            <section class="hero">
+              <div class="hero-copy">
+                <p class="eyebrow"><span class="eyebrow-mark"></span> INTELIGENCIA OPERATIVA <span class="hero-date" id="dashboard-date"></span></p>
+                <h1>Inteligencia que conecta la operación.</h1>
+                <p class="hero-subtitle">Información, análisis y decisiones para una operación más inteligente</p>
+                <div class="hero-actions">
+                  <a href="#inventario" class="button button-primary">Explorar inventario <i data-lucide="arrow-up-right"></i></a>
+                  <a href="#asistente" class="text-link">Consultar al asistente <i data-lucide="arrow-right"></i></a>
+                </div>
+              </div>
+              <figure class="flow-visual" aria-label="Flujo de trabajo: datos, análisis IA, validación humana y acción">
+                <div class="flow-visual-top"><span class="eyebrow">CICLO DE DECISIÓN</span><span class="flow-state"><i></i> CONTROLADO</span></div>
+                <svg class="flow-diagram" viewBox="0 0 640 290" role="img" aria-labelledby="flow-title flow-description">
+                  <title id="flow-title">Datos, análisis IA, validación humana y acción</title>
+                  <desc id="flow-description">Un flujo conectado de cuatro etapas con revisión humana antes de la acción.</desc>
+                  <defs>
+                    <pattern id="grid-pattern" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#254637" stroke-width=".6" /></pattern>
+                    <filter id="node-glow" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="7" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+                  </defs>
+                  <rect width="640" height="290" fill="url(#grid-pattern)" opacity=".42" />
+                  <path class="diagram-line" d="M83 146H557" />
+                  <path class="diagram-line diagram-line-active" d="M83 146H244" />
+                  <path class="diagram-branch" d="M320 146v55h118" />
+                  <path class="diagram-branch" d="M438 201h119v-55" />
+                  <circle class="diagram-node" cx="83" cy="146" r="8" />
+                  <circle class="diagram-node diagram-node-active" cx="244" cy="146" r="9" filter="url(#node-glow)" />
+                  <circle class="diagram-node diagram-node-human" cx="438" cy="146" r="9" />
+                  <circle class="diagram-node" cx="557" cy="146" r="8" />
+                  <circle class="diagram-signal" cx="166" cy="146" r="3" />
+                  <circle class="diagram-signal diagram-signal-delay" cx="376" cy="146" r="3" />
+                  <g class="diagram-card" transform="translate(36 76)"><rect width="94" height="48" rx="8" /><path d="M17 16h21M17 24h34M17 32h25" /><text x="0" y="93">01 / DATOS</text></g>
+                  <g class="diagram-card diagram-card-ai" transform="translate(191 76)"><rect width="106" height="48" rx="8" /><path d="M19 24h7l5-9 7 19 5-10h8" /><text x="-5" y="93">02 / ANÁLISIS IA</text></g>
+                  <g class="diagram-card diagram-card-human" transform="translate(383 76)"><rect width="110" height="48" rx="8" /><circle cx="25" cy="20" r="6" /><path d="M14 37c1-8 21-8 22 0M47 19h45M47 27h31" /><text x="-17" y="93">03 / VALIDACIÓN HUMANA</text></g>
+                  <g class="diagram-card" transform="translate(510 76)"><rect width="94" height="48" rx="8" /><path d="M17 24h42M48 15l9 9-9 9" /><text x="11" y="93">04 / ACCIÓN</text></g>
+                  <text class="diagram-caption" x="320" y="246" text-anchor="middle">ANÁLISIS ASISTIDO · DECISIÓN HUMANA</text>
+                  <path class="diagram-corner" d="M15 15h18M15 15v18M625 257h-18M625 257v-18" />
+                </svg>
+                <ol class="flow-mobile-steps"><li><span>01</span><strong>DATOS</strong></li><li><span>02</span><strong>ANÁLISIS IA</strong></li><li><span>03</span><strong>VALIDACIÓN HUMANA</strong></li><li><span>04</span><strong>ACCIÓN</strong></li></ol>
+                <div class="flow-visual-footer"><span><i></i> SEÑAL</span><span>Revisión antes de actuar</span></div>
+              </figure>
+            </section>
+
+            <section class="stats-grid" aria-label="Indicadores operativos">
+              <article class="stat-card stat-products-card"><div class="stat-top"><span class="stat-icon mint"><i data-lucide="package"></i></span><span class="stat-caption">INVENTARIO</span></div><div class="stat-value" id="stat-products">—</div><div class="stat-label">Productos registrados</div><a href="#inventario" class="stat-link">Ver inventario <i data-lucide="arrow-up-right"></i></a></article>
+              <article class="stat-card stat-invoices-card"><div class="stat-top"><span class="stat-icon peach"><i data-lucide="files"></i></span><span class="stat-caption">DOCUMENTOS</span></div><div class="stat-value" id="stat-invoices">—</div><div class="stat-label">Facturas en revisión</div><a href="#facturas" class="stat-link">Revisar facturas <i data-lucide="arrow-up-right"></i></a></article>
+              <article class="stat-card stat-alerts-card"><div class="stat-top"><span class="stat-icon yellow"><i data-lucide="bell-ring"></i></span><span class="stat-caption">ATENCIÓN</span></div><div class="stat-value" id="stat-alerts">—</div><div class="stat-label">Alertas pendientes</div></article>
+            </section>
+
+            <section class="dashboard-grid">
+              <article class="panel branch-panel"><div class="panel-heading"><div><p class="eyebrow">COBERTURA</p><h2>Resumen por sucursal</h2></div><i class="heading-icon" data-lucide="layout-grid"></i></div><div class="branch-list" id="branch-list"></div></article>
+              <article class="panel activity-panel"><div class="panel-heading"><div><p class="eyebrow">MOVIMIENTOS</p><h2>Actividad reciente</h2></div><i class="heading-icon" data-lucide="clock-3"></i></div><div class="activity-list" id="activity-list"></div></article>
+            </section>
+            <section class="panel sales-report" id="sales-report" aria-labelledby="sales-report-title">
+              <div class="panel-heading"><div><p class="eyebrow">DON ERNESTO / ANÁLISIS COMERCIAL</p><h2 id="sales-report-title">Reporte de ventas sintéticas</h2><p class="page-subtitle">Importes y comparaciones calculados en el servidor; no representan ventas reales.</p></div><button class="button button-secondary" id="sales-ai-summary" type="button" disabled><i data-lucide="sparkles"></i> Resumen con IA</button></div>
+              <form class="sales-filters" id="sales-filters">
+                <label>Desde<input id="sales-from" name="from" type="date" required></label>
+                <label>Hasta<input id="sales-to" name="to" type="date" required></label>
+                <label>Sucursal<select id="sales-branch" name="branch"><option value="">Comparar las cinco sucursales</option><option>Guadalajara</option><option>Zapopan</option><option>León</option><option>Querétaro</option><option>Aguascalientes</option></select></label>
+                <button class="button button-primary" type="submit"><i data-lucide="bar-chart-3"></i> Consultar</button>
+              </form>
+              <p class="sales-report-status" id="sales-report-status" role="status" aria-live="polite">Cargando datos sintéticos…</p>
+              <div class="sales-kpis" aria-label="Indicadores del periodo"><article><span>Ingresos</span><strong id="sales-total-revenue">—</strong></article><article><span>Ventas registradas</span><strong id="sales-total-orders">—</strong></article><article><span>Unidades</span><strong id="sales-total-units">—</strong></article><article><span>Promedio por venta</span><strong id="sales-average-order">—</strong></article></div>
+              <div class="sales-results-grid">
+                <section><h3>Comparación por sucursal</h3><div class="sales-branch-list" id="sales-branch-list"></div></section>
+                <section><h3>Productos más vendidos</h3><ol class="sales-product-list" id="sales-product-list"></ol></section>
+              </div>
+              <section class="sales-trend-section"><h3>Tendencia diaria</h3><div class="sales-trend-list" id="sales-trend-list"></div></section>
+              <p class="sales-ai-summary" id="sales-ai-summary-text" role="status" aria-live="polite">La interpretación con IA requiere una conexión real a RioClaroAssistant.</p>
+            </section>
+          </div>
+
+          <div class="page-view" id="page-inventario" data-title="Inventario inteligente">
+            <section class="page-heading"><div><p class="eyebrow">OPERACIÓN / CATÁLOGO</p><h1>Inventario inteligente</h1><p class="page-subtitle">Consulta productos y revisa posibles nombres equivalentes, sin fusionarlos automáticamente.</p></div><button class="button button-primary" id="open-product-form" type="button"><i data-lucide="plus"></i> Agregar producto</button></section>
+            <div class="info-banner"><i data-lucide="sparkles"></i><p><strong>Sugerencias, no cambios automáticos.</strong> Los nombres similares se señalan para que una persona confirme si representan el mismo producto.</p></div>
+            <section class="panel table-panel"><div class="table-toolbar"><div><p class="eyebrow">CATÁLOGO DE PRODUCTOS</p><h2>Productos registrados</h2></div><div class="filters"><label class="search-field"><i data-lucide="search"></i><span class="sr-only">Buscar producto</span><input id="product-search" type="search" placeholder="Buscar producto…" autocomplete="off"></label><label class="select-field"><span class="sr-only">Filtrar por categoría</span><select id="category-filter"><option value="">Todas las categorías</option></select><i data-lucide="chevron-down"></i></label><label class="select-field"><span class="sr-only">Filtrar por sucursal</span><select id="branch-filter"><option value="">Todas las sucursales</option></select><i data-lucide="chevron-down"></i></label></div></div><div class="table-wrap"><table><thead><tr><th>PRODUCTO</th><th>CATEGORÍA</th><th>SUCURSAL</th><th>EXISTENCIA POR SUCURSAL</th><th>ESTADO</th><th>DETALLE</th></tr></thead><tbody id="product-rows"></tbody></table></div><div class="table-footer"><span id="product-count"></span><span class="table-footer-mark"><i></i> INVENTARIO</span></div></section>
+            <section class="panel normalization-panel"><span class="normalization-icon"><i data-lucide="scan-search"></i></span><div><p class="eyebrow">NORMALIZACIÓN ASISTIDA</p><h2>¿Nombres que podrían coincidir?</h2><p id="normalization-copy">Las sugerencias se calculan sobre el catálogo visible. Ningún producto se fusiona ni modifica automáticamente.</p></div><div class="suggestion-list" id="suggestion-list"></div></section>
+          </div>
+
+          <div class="page-view" id="page-facturas" data-title="Revisión de facturas">
+            <section class="page-heading"><div><p class="eyebrow">OPERACIÓN / DOCUMENTOS</p><h1>Revisión de facturas</h1><p class="page-subtitle">Registra facturas para detectar posibles coincidencias que requieren revisión humana.</p></div><span class="data-badge"><i data-lucide="shield-check"></i> REVISIÓN HUMANA</span></section>
+            <div class="warning-banner"><i data-lucide="shield-alert"></i><p><strong>Una coincidencia no confirma un duplicado.</strong> Revisa los documentos originales antes de tomar cualquier decisión. Esta aplicación no autoriza ni registra pagos.</p></div>
+            <section class="invoice-layout">
+              <article class="panel form-panel"><div class="panel-heading"><div><p class="eyebrow">REGISTRO DOCUMENTAL</p><h2>Crear factura</h2></div><span class="form-step">01</span></div><form id="invoice-form" novalidate><label>Documento de prueba (PDF, JPG o PNG)<input id="invoice-document" name="document" type="file" accept="application/pdf,image/jpeg,image/png"><span class="field-help">La extracción requiere Azure Document Intelligence configurado. El archivo no se conserva; confirma y corrige todos los campos antes de registrar.</span></label><div class="form-feedback" id="invoice-extraction-feedback" role="status" aria-live="polite"></div><label>Proveedor<input name="supplier" required maxlength="120" placeholder="Nombre del proveedor"><span class="field-error" data-error="supplier"></span></label><label>Folio<input name="reference" required maxlength="80" placeholder="Folio de factura"><span class="field-error" data-error="reference"></span></label><div class="form-row"><label>Fecha<input name="date" type="date" required><span class="field-error" data-error="date"></span></label><label>Sucursal<select name="branch" required><option value="">Selecciona sucursal</option></select><span class="field-error" data-error="branch"></span></label></div><div class="form-row"><label>Importe total de la factura<input name="amount" type="number" min="0.01" max="100000000" step="0.01" required placeholder="0.00"><span class="field-error" data-error="amount"></span></label><label>Moneda<select name="currency" required><option value="MXN">MXN · Peso mexicano</option><option value="USD">USD · Dólar estadounidense</option><option value="EUR">EUR · Euro</option></select><span class="field-error" data-error="currency"></span></label></div><div class="invoice-lines-heading"><strong>Artículos (opcionales)</strong><button class="button button-secondary" type="button" id="add-invoice-line"><i data-lucide="plus"></i> Agregar línea</button></div><div class="invoice-lines" id="invoice-lines"></div><div class="invoice-total"><span>Subtotal de artículos calculado</span><strong id="invoice-total">$0.00</strong></div><p class="field-help">Si agregas artículos, su suma debe coincidir con el importe total; el sistema no estima impuestos ni cargos.</p><button class="button button-primary button-full" type="submit"><i data-lucide="file-plus-2"></i> Registrar factura</button><p class="form-disclaimer"><i data-lucide="lock-keyhole"></i> El registro queda pendiente de revisión; no registra pagos ni ejecuta pagos.</p><div class="form-feedback" id="invoice-feedback" role="status" aria-live="polite"></div></form></article>
+              <article class="panel invoice-table-panel"><div class="panel-heading"><div><p class="eyebrow">BITÁCORA LOCAL</p><h2>Facturas registradas</h2></div><i class="heading-icon" data-lucide="file-text"></i></div><div class="table-wrap"><table><thead><tr><th>PROVEEDOR / FOLIO</th><th>FECHA</th><th>IMPORTE</th><th>REVISIÓN</th><th>DECISIÓN HUMANA</th></tr></thead><tbody id="invoice-rows"></tbody></table></div><p class="panel-footnote"><i data-lucide="info"></i> Las decisiones solo cambian el estado de revisión; no registran ni ejecutan pagos.</p></article>
+            </section>
+          </div>
+
+          <div class="page-view" id="page-reclamaciones" data-title="Atención de reclamaciones">
+            <section class="page-heading"><div><p class="eyebrow">SERVICIO / SEGUIMIENTO</p><h1>Atención de reclamaciones</h1><p class="page-subtitle">Registra, atiende y da seguimiento a cada caso. La primera respuesta tiene un objetivo de 15 minutos.</p></div><span class="data-badge"><i data-lucide="timer"></i> SLA · 15 MIN</span></section>
+            <div class="warning-banner complaint-access-note"><i data-lucide="lock-keyhole"></i><p><strong>Acceso por sucursal.</strong> Elige una sucursal para consultar sus reclamaciones. <span id="complaint-access-copy">La API valida los permisos y limita los datos visibles a la sucursal seleccionada.</span></p></div>
+            <section class="complaint-layout">
+              <article class="panel form-panel complaint-form-panel">
+                <div class="panel-heading"><div><p class="eyebrow">NUEVO CASO</p><h2>Registrar reclamación</h2></div><span class="form-step">01</span></div>
+                <form id="complaint-form" novalidate>
+                  <label> Sucursal<select name="branch" id="complaint-create-branch" required><option value="">Selecciona una sucursal</option></select><span class="field-error" data-error="branch"></span></label>
+                  <label>Nombre del cliente<input name="customerName" required maxlength="120" autocomplete="name" placeholder="Nombre del cliente"><span class="field-error" data-error="customerName"></span></label>
+                  <label>Categoría<input name="category" required maxlength="80" placeholder="Ej. Entrega, producto o facturación"><span class="field-error" data-error="category"></span></label>
+                  <label>Descripción<textarea name="description" required maxlength="2000" rows="4" placeholder="Describe el motivo de la reclamación"></textarea><span class="field-error" data-error="description"></span></label>
+                  <label class="complaint-consent"><input type="checkbox" id="complaint-contact-consent"> El cliente autoriza que se use su medio de contacto para responder.</label>
+                  <div class="form-row complaint-contact-fields" id="complaint-contact-fields" hidden>
+                    <label>Medio de contacto<input name="contactChannel" maxlength="60" placeholder="Ej. teléfono, correo o WhatsApp"></label>
+                    <label>Dato de contacto<input name="contactValue" maxlength="200" placeholder="Teléfono o correo autorizado"></label>
+                  </div>
+                  <button class="button button-primary button-full" type="submit"><i data-lucide="send"></i> Registrar reclamación</button>
+                  <p class="form-disclaimer"><i data-lucide="database"></i> El registro se confirma solo después de recibir respuesta satisfactoria del servidor.</p>
+                  <div class="form-feedback" id="complaint-feedback" role="status" aria-live="polite"></div>
+                </form>
+              </article>
+              <article class="panel complaint-list-panel">
+                <div class="panel-heading"><div><p class="eyebrow">BANDEJA DE ATENCIÓN</p><h2>Reclamaciones registradas</h2></div><button class="icon-button" type="button" id="refresh-complaints" aria-label="Actualizar reclamaciones"><i data-lucide="refresh-cw"></i></button></div>
+                <div class="complaint-filters">
+                  <label>Sucursal<select id="complaint-branch-filter"><option value="">Selecciona una sucursal</option></select></label>
+                  <label>Estado<select id="complaint-status-filter"><option value="">Todos los estados</option><option value="pending">Pendiente</option><option value="in_progress">En atención</option><option value="resolved">Resuelta</option><option value="closed">Cerrada</option></select></label>
+                </div>
+                <div class="complaint-list-status" id="complaint-list-status" role="status" aria-live="polite">Selecciona una sucursal autorizada para consultar sus reclamaciones.</div>
+                <div class="complaint-list" id="complaint-list" aria-busy="false"></div>
+              </article>
+            </section>
+          </div>
+
+          <div class="page-view" id="page-asistente" data-title="Asistente IA">
+            <section class="page-heading"><div><p class="eyebrow">CONSULTAS / MICROSOFT AI FOUNDRY</p><h1>Asistente IA</h1><p class="page-subtitle">Orientación para consultas operativas con prudencia y claridad.</p></div><span class="connection-badge" id="assistant-status"><span class="connection-dot pending"></span> Conexión pendiente</span></section>
+            <section class="chat-layout">
+              <article class="panel chat-panel">
+                <div class="chat-heading"><span class="chat-avatar"><i data-lucide="waves"></i></span><div><strong>RioClaroAssistant</strong><span>Microsoft AI Foundry · Supervisión humana</span></div><button class="button button-secondary new-chat-button" type="button" id="new-chat">Nueva conversación</button><span class="chat-status" id="chat-processing-status"><span></span> Esperando consulta</span></div>
+                <div class="chat-messages" id="chat-messages" aria-live="polite"><div class="message assistant-message"><span class="message-avatar"><i data-lucide="sparkles"></i></span><div class="message-content"><p id="assistant-connection-message">Preparando conexión con RioClaroAssistant…</p><span class="message-meta" id="assistant-connection-meta">PREPARANDO AGENTE</span></div></div><div class="message system-message"><i data-lucide="info"></i><p>No compartas datos personales, financieros ni credenciales. El asistente recibe únicamente el contexto operativo autorizado por el servidor.</p></div></div>
+                <div class="suggested-questions"><span>CONSULTAS SUGERIDAS</span><div><button type="button" class="suggestion-chip" data-question="¿Qué información debo validar antes de revisar una factura?" disabled>Validar una factura</button><button type="button" class="suggestion-chip" data-question="¿Cómo revisar nombres de productos potencialmente equivalentes?" disabled>Equivalencias de productos</button><button type="button" class="suggestion-chip" data-question="¿Qué significa una posible coincidencia de factura?" disabled>Posible duplicado</button></div></div>
+                <form class="chat-composer" id="chat-form"><label class="sr-only" for="chat-input">Escribe o dicta un mensaje para RioClaroAssistant</label><textarea id="chat-input" rows="1" maxlength="2000" placeholder="El chat está pendiente de configuración…" required disabled></textarea><button class="button button-secondary chat-voice-button" id="chat-mic-button" type="button" aria-label="Iniciar dictado" title="Iniciar dictado"><i data-lucide="mic"></i></button><button class="button button-secondary chat-voice-cancel" id="chat-voice-cancel" type="button" aria-label="Cancelar grabación" title="Cancelar grabación" hidden><i data-lucide="x"></i></button><button class="button button-primary send-button" type="submit" aria-label="Enviar mensaje" disabled><i data-lucide="arrow-up"></i></button></form>
+                <div class="chat-voice-status" id="chat-voice-status" role="status" aria-live="polite" hidden></div>
+                <p class="chat-disclaimer"><i data-lucide="shield-check"></i> Cada respuesta requiere criterio y revisión humana. No incluyas información sensible.</p>
+              </article>
+              <aside class="chat-side"><div class="panel chat-info"><span class="side-icon"><i data-lucide="shield-check"></i></span><p class="eyebrow">IA RESPONSABLE</p><h2>Un apoyo, no una autoridad</h2><p>El agente debe identificar sus límites, evitar datos sensibles y recomendar revisión humana ante facturas dudosas.</p><a href="#responsable" class="text-link">Ver principios <i data-lucide="arrow-right"></i></a></div></aside>
+            </section>
+          </div>
+
+          <div class="page-view" id="page-acerca" data-title="Acerca del proyecto">
+            <section class="page-heading"><div><p class="eyebrow">RÍO CLARO AI / INTELIGENCIA OPERATIVA</p><h1>Acerca del proyecto</h1><p class="page-subtitle">Información operativa organizada para facilitar decisiones verificables.</p></div><span class="data-badge"><i data-lucide="activity"></i> AUTORÍA DEL PROYECTO</span></section>
+            <section class="responsible-intro"><span class="intro-icon"><i data-lucide="waves"></i></span><div><p class="eyebrow">OBJETIVO</p><h2>Inteligencia de apoyo para Distribuidora Río Claro.</h2><p>La aplicación organiza información, señala posibles inconsistencias y permite conectar de forma controlada un agente de Microsoft Foundry.</p></div></section>
+            <section class="panel access-policy"><div class="panel-heading"><div><p class="eyebrow">AUTORÍA Y ALCANCE</p><h2>Desarrollado por</h2></div><i class="heading-icon" data-lucide="badge-check"></i></div><p class="author-name">Rebollar Cervantes Michael Gabriel</p><p class="panel-footnote">La aplicación no se conecta a inventario, facturación ni otros sistemas corporativos.</p></section>
+          </div>
+
+          <div class="page-view" id="page-documentacion" data-title="Documentación">
+            <section class="page-heading"><div><p class="eyebrow">GUÍA / CAPACIDADES</p><h1>Documentación</h1><p class="page-subtitle">Explora los módulos disponibles y sus límites antes de evaluar los flujos.</p></div><span class="data-badge"><i data-lucide="book-open"></i> GUÍA DE EVALUACIÓN</span></section>
+            <section class="principles-grid documentation-grid">
+              <article class="panel principle-card"><span class="principle-icon mint"><i data-lucide="boxes"></i></span><h2>Inventario y normalización</h2><p>Consulta por texto o voz las existencias de una sucursal, busca productos y revisa candidatos de normalización. Las confirmaciones conservan la trazabilidad disponible en el conjunto sintético.</p><a class="text-link" href="#inventario">Abrir inventario <i data-lucide="arrow-right"></i></a></article>
+              <article class="panel principle-card"><span class="principle-icon peach"><i data-lucide="file-check-2"></i></span><h2>Facturas</h2><p>Registra facturas sintéticas y revisa posibles coincidencias. Las acciones de evaluación no generan pagos ni aprueban documentos fiscales reales.</p><a class="text-link" href="#facturas">Abrir facturas <i data-lucide="arrow-right"></i></a></article>
+              <article class="panel principle-card"><span class="principle-icon lavender"><i data-lucide="messages-square"></i></span><h2>Reclamaciones</h2><p>Registra casos sintéticos, consulta su historial, mide el SLA y prueba respuestas y cambios de estado.</p><a class="text-link" href="#reclamaciones">Abrir reclamaciones <i data-lucide="arrow-right"></i></a></article>
+              <article class="panel principle-card"><span class="principle-icon mint"><i data-lucide="message-circle"></i></span><h2>Asistente Microsoft Foundry</h2><p>Cuando el servidor confirma la configuración, las consultas usan el agente RioClaroAssistant y únicamente el contexto sintético autorizado. Si no está disponible, no se simulan respuestas.</p><a class="text-link" href="#asistente">Abrir asistente <i data-lucide="arrow-right"></i></a></article>
+            </section>
+            <section class="panel access-policy documentation-limitations"><div class="panel-heading"><div><p class="eyebrow">LÍMITES EXPLÍCITOS</p><h2>Funciones no implementadas</h2></div><i class="heading-icon" data-lucide="info"></i></div><div class="table-wrap"><table><thead><tr><th>CAPACIDAD</th><th>ESTADO</th><th>ALCANCE</th></tr></thead><tbody><tr><td>Proveedores y clientes</td><td><span class="review-pill review-needed">No disponible</span></td><td>No existen módulos ni registros para consultar.</td></tr><tr><td>Reportes operativos</td><td><span class="review-pill review-needed">No disponible</span></td><td>El dashboard incluye solo ventas sintéticas de demostración.</td></tr><tr><td>Acceso empresarial</td><td><span class="review-pill review-needed">Inicio de sesión web pendiente</span></td><td>La API exige identidad en producción fuera del modo de evaluación aislado.</td></tr></tbody></table></div></section>
+          </div>
+
+          <div class="page-view" id="page-responsable" data-title="IA responsable">
+            <section class="page-heading"><div><p class="eyebrow">CONFIANZA / TRANSPARENCIA / CONTROL</p><h1>IA responsable</h1><p class="page-subtitle">Principios para que la inteligencia artificial apoye a las personas de Río Claro.</p></div><span class="responsible-mark"><i data-lucide="shield-check"></i> Supervisión humana</span></section>
+            <section class="responsible-intro"><span class="intro-icon"><i data-lucide="scale"></i></span><div><p class="eyebrow">PRINCIPIO CENTRAL</p><h2>La decisión final siempre es de una persona.</h2><p>La inteligencia artificial apoya los flujos de trabajo; no sustituye controles, experiencia ni revisión de documentos originales.</p></div></section>
+            <section class="principles-grid"><article class="panel principle-card"><span class="principle-icon mint"><i data-lucide="badge-check"></i></span><h2>Confiabilidad</h2><p>Las sugerencias de nombres solo señalan posibles coincidencias. Una persona confirma equivalencias y revisa cualquier factura dudosa.</p><span class="principle-tag">Revisión humana requerida</span></article><article class="panel principle-card"><span class="principle-icon lavender"><i data-lucide="eye"></i></span><h2>Transparencia</h2><p>Las respuestas de IA dependen de la conexión real a Foundry; no se generan respuestas si la conexión falla.</p><span class="principle-tag">Límites explícitos</span></article><article class="panel principle-card"><span class="principle-icon peach"><i data-lucide="lock-keyhole"></i></span><h2>Privacidad</h2><p>No compartas claves, credenciales ni datos personales con el asistente. Las credenciales de servidor no deben exponerse al navegador.</p><span class="principle-tag">Minimización de datos</span></article></section>
+            <section class="panel access-policy"><div class="panel-heading"><div><p class="eyebrow">MÍNIMO PRIVILEGIO</p><h2>Permisos que valida la API</h2></div><span class="muted-chip">Inicio de sesión web pendiente</span></div><div class="table-wrap"><table><thead><tr><th>ROL ENTRA</th><th>ALCANCE PREVISTO</th><th>CONTROL DEL SERVIDOR</th></tr></thead><tbody><tr><td>Administrator</td><td>Inventario, facturas, auditoría y control de IA</td><td>Token firmado y rol de aplicación</td></tr><tr><td>Gerente de sucursal</td><td>Inventario de su sucursal</td><td>Claim de sucursal firmado; sin acceso a facturas</td></tr><tr><td>Cuentas por pagar</td><td>Revisión y registro de facturas</td><td>Rol de aplicación; sin acceso a inventario</td></tr><tr><td>Bodega</td><td>Inventario de su sucursal</td><td>Claim de sucursal firmado; sin acceso a facturas</td></tr></tbody></table></div><p class="panel-footnote"><i data-lucide="info"></i> La API aplica estos permisos a tokens Entra verificados. El inicio de sesión web está pendiente y no hay datos corporativos integrados.</p></section>
+            <section class="panel data-legend"><div class="panel-heading"><div><p class="eyebrow">ESTADO DE LA INFORMACIÓN</p><h2>Fuentes y disponibilidad</h2></div></div><div class="legend-list"><div><span class="legend-pill local-pill"><i data-lucide="database"></i> REGISTROS DE PRÁCTICA</span><p>Productos, facturas y reclamaciones usan archivos JSON locales configurables, separados por origen.</p></div><div><span class="legend-pill real-pill"><i data-lucide="circle-check"></i> FUENTES CORPORATIVAS</span><p>No hay una fuente de datos corporativa conectada.</p></div><div><span class="legend-pill unavailable-pill"><i data-lucide="circle-help"></i> INTEGRACIONES OPCIONALES</span><p>Foundry y Document Intelligence requieren endpoints, identidad y permisos configurados.</p></div></div></section>
+            <div class="footer-disclaimer"><i data-lucide="triangle-alert"></i><p><strong>Estado de acceso:</strong> la API valida tokens Entra y aplica permisos por rol y sucursal. El inicio de sesión web está pendiente y la API requiere identidad en producción fuera del modo aislado de evaluación. La auditoría local no está configurada como almacenamiento durable empresarial. No se realizan acciones financieras.</p></div>
+          </div>
+        </main>
+        <footer class="app-footer"><span>RÍO CLARO AI <span>·</span> Inteligencia operativa</span><span>Control · precisión · supervisión humana</span></footer>
+      </div>
+    </div>
+
+    <dialog class="modal" id="product-detail-dialog" aria-labelledby="product-detail-title"><section><div class="modal-heading"><div><p class="eyebrow">FICHA CANÓNICA / TRAZABILIDAD</p><h2 id="product-detail-title">Detalle del producto</h2></div><button class="icon-button" type="button" id="close-product-detail" aria-label="Cerrar detalle"><i data-lucide="x"></i></button></div><div id="product-detail-content"></div></section></dialog>
+    <dialog class="modal complaint-detail-modal" id="complaint-detail-dialog" aria-labelledby="complaint-detail-title"><section><div class="modal-heading"><div><p class="eyebrow">ATENCIÓN / HISTORIAL</p><h2 id="complaint-detail-title">Detalle de reclamación</h2></div><button class="icon-button" type="button" id="close-complaint-detail" aria-label="Cerrar detalle"><i data-lucide="x"></i></button></div><div id="complaint-detail-content"></div></section></dialog>
+    <dialog class="modal" id="invoice-review-dialog" aria-labelledby="invoice-review-title"><form id="invoice-review-form" novalidate><div class="modal-heading"><div><p class="eyebrow">REVISIÓN HUMANA</p><h2 id="invoice-review-title">Decisión de factura</h2></div><button class="icon-button" type="button" id="close-invoice-review" aria-label="Cerrar revisión"><i data-lucide="x"></i></button></div><label>Decisión<select id="invoice-review-decision" required></select></label><label>Justificación documentada<textarea id="invoice-review-evidence" rows="4" minlength="20" maxlength="500" required placeholder="Describe qué revisaste en el documento original (20 a 500 caracteres)"></textarea></label><p class="modal-note"><i data-lucide="info"></i> Esta decisión solo actualiza el estado de revisión. No aprueba pagos ni los ejecuta.</p><div class="modal-actions"><button class="button button-secondary" type="button" id="cancel-invoice-review">Cancelar</button><button class="button button-primary" type="submit">Guardar decisión</button></div><div class="form-feedback" id="invoice-review-feedback" role="status" aria-live="polite"></div></form></dialog>
+    <dialog class="modal" id="product-dialog" aria-labelledby="product-dialog-title"><form id="product-form" novalidate><div class="modal-heading"><div><p class="eyebrow">NUEVO REGISTRO</p><h2 id="product-dialog-title">Agregar producto</h2></div><button class="icon-button" type="button" id="close-product-form" aria-label="Cerrar"><i data-lucide="x"></i></button></div><label>Nombre del producto<input name="name" required maxlength="100" placeholder="Nombre del producto"><span class="field-error" data-error="name"></span></label><label>Categoría<input name="category" required maxlength="80" placeholder="Categoría"><span class="field-error" data-error="category"></span></label><label>Sucursal<select name="branch" required></select><span class="field-error" data-error="branch"></span></label><label>Existencia<input name="stock" type="number" required min="0" max="1000000" step="1" placeholder="0"><span class="field-error" data-error="stock"></span></label><p class="modal-note"><i data-lucide="info"></i> Se guarda únicamente en el conjunto de Práctica local.</p><div class="modal-actions"><button class="button button-secondary" type="button" id="cancel-product-form">Cancelar</button><button class="button button-primary" type="submit"><i data-lucide="plus"></i> Agregar producto</button></div><div class="form-feedback" id="product-feedback" role="status" aria-live="polite"></div></form></dialog>
+    <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
+  </body>
+</html>
