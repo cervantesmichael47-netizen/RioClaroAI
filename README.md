@@ -2,7 +2,7 @@
 
 **Autor:** Rebollar Cervantes Michael Gabriel  
 **Problema:** la información de ventas, inventario, facturas y atención puede requerir búsquedas y revisiones manuales antes de decidir.  
-**Objetivo:** demostrar cómo una aplicación web con análisis e IA puede organizar esos flujos sin sustituir la autorización ni el criterio de una persona.  
+**Objetivo:** demostrar cómo una aplicación web con análisis e IA puede organizar esos flujos sin sustituir la autorización ni el criterio deuna persona.
 **Solución:** dashboard, reporte comercial sintético, inventario por sucursal, registro y revisión documental, seguimiento de reclamaciones y chat/dictado conectado opcionalmente a Microsoft Foundry.
 
 Esta versión está preparada para validación local. Los productos, sucursales, importes, facturas, duplicados y actividades precargados son **datos sintéticos de demostración** y no provienen de sistemas corporativos. Se guardan en archivos JSON configurables; no hay integración con inventario ni facturación corporativos. El OCR es una integración opcional con Azure AI Document Intelligence y no se ha conectado ni validado con un recurso Azure. Toda sugerencia requiere revisión humana.
