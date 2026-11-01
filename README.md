@@ -1,6 +1,28 @@
 # RÍO CLARO AI
 
 <p align="center">
+  <a href="https://rioclaro-ai-mgrc-febegnb5ctajgbcx.westus-01.azurewebsites.net/">
+    <img src="https://img.shields.io/badge/🚀_EXPLORAR_RÍO_CLARO_AI-ABRIR_APLICACIÓN-218838?style=for-the-badge&labelColor=123524" alt="Abrir Río Claro AI">
+  </a>
+</p>
+
+<p align="center">
+  **INTELIGENCIA ARTIFICIAL EN ACCIÓN**
+  <br>
+  <em>Una nueva forma de gestionar, analizar y transformar la información empresarial.</em>
+</p>
+
+<p align="center">
+  🌐 **Aplicación web disponible**
+  <br>
+  <a href="https://rioclaro-ai-mgrc-febegnb5ctajgbcx.westus-01.azurewebsites.net/">
+    https://rioclaro-ai-mgrc-febegnb5ctajgbcx.westus-01.azurewebsites.net/
+  </a>
+</p>
+
+---
+
+<p align="center">
   <img src="public/images/rioclaro_inicio.png" alt="Río Claro AI - Página principal" width="100%">
 </p>
 
