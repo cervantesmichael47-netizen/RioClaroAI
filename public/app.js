@@ -16,7 +16,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const icon = (name) => `<i data-lucide="${name}"></i>`;
 const money = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
-let dataOrigin = sessionStorage.getItem('rioclaro-data-origin') || 'practice';
+let dataOrigin = 'practice';
 let products = [];
 let searchedProducts = null;
 let productSearchRequest = 0;
@@ -29,6 +29,8 @@ let salesReport = null;
 let dataLoadRequest = 0;
 let requestPending = false;
 let editingProductId = null;
+let editingInvoiceId = null;
+let editingComplaintId = null;
 let chatRecognition = null;
 let chatListening = false;
 let chatRecognitionCancelled = false;
@@ -285,7 +287,12 @@ function renderSuggestions(visibleProducts) {
 }
 
 function renderInvoices() {
-  $('#invoice-rows').innerHTML = invoices.length ? invoices.map((invoice) => {
+  const search = $('#invoice-search')?.value.trim().toLocaleLowerCase('es-MX') ?? '';
+  const visibleInvoices = invoices.filter((invoice) =>
+    [invoice.reference, invoice.supplier, invoice.date]
+      .some((value) => String(value ?? '').toLocaleLowerCase('es-MX').includes(search)),
+  );
+  $('#invoice-rows').innerHTML = visibleInvoices.length ? visibleInvoices.map((invoice) => {
     const missingFields = ['supplier', 'reference', 'date', 'amount']
       .filter((field) => invoice[field] === undefined || invoice[field] === null || invoice[field] === '');
     const reviewLabel = invoice.possibleDuplicate
@@ -298,17 +305,67 @@ function renderInvoices() {
       : 'Sin verificar';
     const supplier = invoice.supplier || 'Sin verificar';
     const canReview = evaluationMode && !['confirmed', 'rejected'].includes(invoice.status);
+    const canEdit = evaluationMode && !invoice.inventoryPostedAt
+      && !['confirmed', 'rejected'].includes(invoice.status);
     const actions = [
       canReview
         ? `<button class="button button-secondary invoice-review-button" type="button" data-invoice-review="${invoice.id}">Revisar decisión</button>`
         : evaluationMode ? 'Revisión finalizada' : 'Requiere revisión humana autorizada',
+      canEdit
+        ? `<button class="button button-secondary" type="button" data-edit-invoice="${invoice.id}">Editar</button>`
+        : '',
+      `<button class="button button-secondary" type="button" data-invoice-history="${invoice.id}" aria-expanded="false">Historial</button>`,
       evaluationMode && !invoice.inventoryPostedAt
         ? `<button class="button button-secondary" type="button" data-delete-invoice-id="${invoice.id}" aria-label="Eliminar factura ${escapeHTML(invoice.reference || invoice.id)}">Eliminar</button>`
         : '',
     ].filter(Boolean).join(' ');
-    return `<tr><td><span class="invoice-supplier">${escapeHTML(supplier)}</span><span class="invoice-ref">${escapeHTML(invoice.reference || 'Folio sin verificar')}</span></td><td>${escapeHTML(invoice.date || 'Sin verificar')}</td><td>${escapeHTML(amount)}</td><td><span class="review-pill ${invoice.possibleDuplicate || missingFields.length ? 'review-needed' : ''}">${escapeHTML(invoice.status || reviewLabel)}</span></td><td>${actions}</td></tr>`;
+    const historyRows = (invoice.history ?? []).map((entry) =>
+      `<li>${escapeHTML(formatDateTime(entry.at))} · ${escapeHTML(entry.event === 'edited' ? 'Edición' : entry.status || 'Actualización')}</li>`,
+    ).join('');
+    const itemSummary = (invoice.items ?? []).map((item) =>
+      `${escapeHTML(item.description)} · ${item.quantity} unid.`,
+    ).join('<br>');
+    return `<tr><td><span class="invoice-supplier">${escapeHTML(supplier)}</span><span class="invoice-ref">${escapeHTML(invoice.reference || 'Folio sin verificar')}</span></td><td>${escapeHTML(invoice.date || 'Sin verificar')}</td><td>${escapeHTML(amount)}</td><td><span class="review-pill ${invoice.possibleDuplicate || missingFields.length ? 'review-needed' : ''}">${escapeHTML(invoice.status || reviewLabel)}</span></td><td>${actions}</td></tr><tr class="invoice-history-row" data-invoice-history-content="${invoice.id}" hidden><td colspan="5"><strong>Artículos asociados</strong><p>${itemSummary || 'Sin artículos registrados.'}</p><strong>Historial</strong><ol>${historyRows || '<li>Sin movimientos registrados.</li>'}</ol></td></tr>`;
   }).join('')
     : '<tr><td colspan="5" class="empty-state">No hay registros de facturas.</td></tr>';
+}
+
+function openInvoiceEdit(invoiceId) {
+  const invoice = invoices.find((item) => item.id === invoiceId);
+  if (!invoice || !evaluationMode || invoice.inventoryPostedAt
+    || ['confirmed', 'rejected'].includes(invoice.status)) return;
+  const form = $('#invoice-form');
+  editingInvoiceId = invoice.id;
+  form.elements.namedItem('supplier').value = invoice.supplier;
+  form.elements.namedItem('reference').value = invoice.reference;
+  form.elements.namedItem('date').value = invoice.date;
+  form.elements.namedItem('branch').value = invoice.branch || '';
+  form.elements.namedItem('amount').value = String(invoice.amount);
+  form.elements.namedItem('currency').value = invoice.currency || 'MXN';
+  $('.panel-heading h2', form.closest('.form-panel')).textContent = 'Editar factura';
+  $('button[type="submit"]', form).innerHTML = `${icon('save')} <span>Guardar cambios</span>`;
+  $('#cancel-invoice-edit').hidden = false;
+  $$('.invoice-line input, .invoice-line button', form).forEach((control) => { control.disabled = true; });
+  $('#invoice-extraction-feedback').textContent = 'Edita los datos generales. Los artículos asociados se conservan sin cambios.';
+  clearErrors(form);
+  setFeedback($('#invoice-feedback'), 'Los artículos asociados se conservan sin cambios durante esta edición.');
+  navigate('facturas');
+  form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function resetInvoiceForm() {
+  const form = $('#invoice-form');
+  form.reset();
+  editingInvoiceId = null;
+  $('.panel-heading h2', form.closest('.form-panel')).textContent = 'Crear factura';
+  $('button[type="submit"]', form).innerHTML = `${icon('file-plus-2')} Registrar factura`;
+  $('#cancel-invoice-edit').hidden = true;
+  $('#invoice-extraction-feedback').textContent = '';
+  $('#invoice-lines').replaceChildren();
+  addInvoiceLine(false);
+  updateInvoiceTotal();
+  updateWriteControls();
+  refreshIcons();
 }
 
 function openInvoiceReview(invoiceId) {
@@ -500,6 +557,17 @@ function renderComplaints() {
   refreshIcons();
 }
 
+function resetComplaintForm() {
+  const form = $('#complaint-form');
+  form.reset();
+  editingComplaintId = null;
+  $('.panel-heading h2', form.closest('.form-panel')).textContent = 'Registrar reclamación';
+  $('button[type="submit"]', form).innerHTML = `${icon('send')} Registrar reclamación`;
+  $('#cancel-complaint-edit').hidden = true;
+  $('#complaint-contact-fields').hidden = true;
+  clearErrors(form);
+}
+
 async function loadComplaints() {
   const branch = $('#complaint-branch-filter').value;
   const status = $('#complaint-status-filter').value;
@@ -510,7 +578,7 @@ async function loadComplaints() {
   renderComplaints();
   if (!branch) {
     list.setAttribute('aria-busy', 'false');
-    statusMessage.textContent = 'Selecciona una sucursal autorizada para consultar sus reclamaciones.';
+    statusMessage.textContent = 'Selecciona una sucursal para consultar sus reclamaciones de práctica.';
     return;
   }
   list.setAttribute('aria-busy', 'true');
@@ -552,16 +620,19 @@ function renderComplaintDetail(complaint) {
   const draftButton = !complaint.firstResponseAt
     ? `<button class="button button-secondary" type="button" data-draft-response${chatEnabled ? '' : ' disabled'}>Sugerir borrador con IA</button><span class="field-help">El agente recibe solo la categoría y el estado; no se envía al cliente.</span>`
     : '';
-  const deleteAction = evaluationMode
-    ? '<section class="complaint-detail-section"><button class="button button-secondary" type="button" data-delete-complaint>Eliminar reclamación sintética</button></section>'
+  const editAction = evaluationMode
+  ? '<section class="complaint-detail-section"><button class="button button-secondary" type="button" data-edit-complaint>Editar información</button></section>'
     : '';
+  const deleteAction = evaluationMode
+  ? '<section class="complaint-detail-section"><button class="button button-secondary" type="button" data-delete-complaint>Eliminar reclamación sintética</button></section>'
+  : '';
   content.innerHTML = `
     <div class="complaint-detail-summary"><span class="status-pill ${complaint.status === 'resolved' || complaint.status === 'closed' ? 'status-ok' : complaint.status === 'in_progress' ? 'status-low' : 'status-empty'}">${escapeHTML(complaintStates[complaint.status] ?? complaint.status)}</span><span>${escapeHTML(complaint.branch)}</span></div>
     <dl class="complaint-detail-fields"><div><dt>Recibida</dt><dd>${escapeHTML(formatDateTime(complaint.receivedAt))}</dd></div><div><dt>Cliente</dt><dd>${escapeHTML(complaint.customerName)}</dd></div><div><dt>Categoría</dt><dd>${escapeHTML(complaint.category)}</dd></div><div><dt>Responsable</dt><dd>${escapeHTML(complaint.assignedTo || 'Sin asignar')}</dd></div></dl>
     <p class="complaint-detail-description">${escapeHTML(complaint.description)}</p>${contact}${responseInfo}
     <section class="complaint-detail-section"><h3>Actualizar estado</h3><form class="complaint-action-form" data-action="status"><label>Nuevo estado<select name="status">${Object.entries(complaintStates).map(([value, label]) => `<option value="${value}"${complaint.status === value ? ' selected' : ''}>${label}</option>`).join('')}</select></label><label>Nota del cambio (opcional)<textarea name="note" rows="2" maxlength="500" placeholder="Contexto del cambio"></textarea></label><button class="button button-secondary" type="submit">Guardar estado</button><div class="form-feedback" data-action-feedback role="status" aria-live="polite"></div></form></section>
     ${complaint.firstResponseAt ? '' : `<section class="complaint-detail-section"><h3>Revisar respuesta antes de registrar</h3><form class="complaint-action-form" data-action="response"><label>Borrador revisado<textarea name="message" rows="3" maxlength="2000" required placeholder="Escribe o corrige el borrador antes de registrarlo"></textarea></label>${draftButton}<label class="complaint-consent"><input type="checkbox" name="humanApproved" required> Confirmo que revisé y aprobé este texto. No se enviará automáticamente.</label><button class="button button-primary" type="submit">Registrar respuesta revisada</button><div class="form-feedback" data-action-feedback role="status" aria-live="polite"></div></form></section>`}
-    <section class="complaint-detail-section"><h3>Historial completo</h3><ol class="complaint-history">${historyRows}</ol></section>${deleteAction}`;
+    <section class="complaint-detail-section"><h3>Historial completo</h3><ol class="complaint-history">${historyRows}</ol></section>${editAction}${deleteAction}`;
 }
 
 async function showComplaintDetails(complaintId) {
@@ -917,20 +988,19 @@ async function loadSecurityStatus() {
     if (evaluationMode) {
       refreshData ||= dataOrigin !== 'practice';
       dataOrigin = 'practice';
-      sessionStorage.setItem('rioclaro-data-origin', dataOrigin);
       $('#data-origin').value = dataOrigin;
       $('#data-origin').closest('.origin-select-label').hidden = true;
-      $('#complaint-access-copy').textContent = 'El servidor limita todas las consultas y cambios al entorno sintético de evaluación.';
+      $('#complaint-access-copy').textContent = 'Todas las consultas y cambios se limitan a datos sintéticos de práctica.';
     } else {
       $('#data-origin').closest('.origin-select-label').hidden = false;
-      $('#complaint-access-copy').textContent = 'La API valida los permisos; Operación requiere inicio de sesión con Entra, que aún no está disponible en esta interfaz.';
+      $('#complaint-access-copy').textContent = 'Las reclamaciones se guardan en el conjunto de práctica.';
     }
     practiceWritesEnabled = Boolean(status.practiceWritesEnabled || evaluationMode);
     $('#security-banner-text').textContent = evaluationMode
-      ? 'Entorno público de evaluación: se usan datos sintéticos aislados. Puedes probar las funciones disponibles; no se consultan datos productivos.'
+      ? 'Demostración pública: las consultas y modificaciones usan exclusivamente datos sintéticos de práctica.'
       : practiceWritesEnabled
-        ? 'Las altas de productos y facturas se guardan solo en Práctica local. Operación requiere Entra; las facturas quedan pendientes de revisión y no se realizan pagos.'
-      : 'Las escrituras requieren un token de Entra verificado por la API. La interfaz web aún no implementa inicio de sesión.';
+        ? 'Las consultas y cambios se guardan en datos de práctica. Las facturas quedan pendientes de revisión; no se realizan pagos.'
+      : 'Las modificaciones de práctica no están disponibles en este entorno.';
     if (refreshData) {
       await loadData();
       void loadSalesReport();
@@ -968,9 +1038,10 @@ async function loadSecurityStatus() {
     } else if (connection?.state === 'connecting') {
       $('#assistant-connection-message').textContent = 'Preparando conexión con RioClaroAssistant…';
       $('#assistant-connection-meta').textContent = 'PREPARANDO AGENTE';
-    } else if (status.aiConfigured && status.aiEnabled && !status.aiSuspended) {
-      $('#assistant-connection-message').textContent = connection?.message || 'El servidor reintentará la conexión automáticamente.';
-      $('#assistant-connection-meta').textContent = 'CONEXIÓN PENDIENTE';
+    } else {
+      $('#assistant-connection-message').textContent = connection?.message
+        || 'El asistente de IA no está disponible temporalmente. Inventario, facturas y reclamaciones siguen funcionando.';
+      $('#assistant-connection-meta').textContent = 'IA NO DISPONIBLE';
     }
     $('#chat-input').disabled = !chatEnabled;
     $('#chat-form button[type="submit"]').disabled = !chatEnabled || chatListening;
@@ -979,7 +1050,7 @@ async function loadSecurityStatus() {
       ? 'Escribe tu pregunta…'
       : connection?.state === 'connecting'
         ? 'Preparando el agente…'
-        : 'El chat estará disponible cuando el agente esté conectado…';
+        : 'El asistente no está disponible temporalmente; los demás módulos siguen activos.';
   } catch {
     $('#security-banner-text').textContent = 'No fue posible consultar el estado de seguridad del servidor.';
   }
@@ -1093,6 +1164,10 @@ function initialize() {
     $('#complaint-contact-fields').hidden = !complaintContactConsent.checked;
   });
   const complaintForm = $('#complaint-form');
+  $('#cancel-complaint-edit').addEventListener('click', () => {
+    resetComplaintForm();
+    setFeedback($('#complaint-feedback'), 'Edición cancelada.');
+  });
   complaintForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (requestPending || !validateForm(complaintForm, [
@@ -1112,8 +1187,11 @@ function initialize() {
     setFeedback($('#complaint-feedback'), '');
     try {
       const branch = complaintForm.elements.namedItem('branch').value;
-      const result = await api('/api/complaints', {
-        method: 'POST',
+      const wasEditing = editingComplaintId !== null;
+      const result = await api(
+        wasEditing ? `/api/complaints/${editingComplaintId}` : '/api/complaints',
+        {
+        method: wasEditing ? 'PATCH' : 'POST',
         body: JSON.stringify({
           branch,
           customerName: complaintForm.elements.namedItem('customerName').value.trim(),
@@ -1121,14 +1199,16 @@ function initialize() {
           category: complaintForm.elements.namedItem('category').value.trim(),
           ...(complaintContactConsent.checked ? { contactChannel, contactValue } : {}),
         }),
-      });
+        },
+      );
       if (!result.item || !result.item.id || result.item.branch !== branch) {
         throw new Error('El servidor no confirmó la creación de la reclamación.');
       }
-      complaintForm.reset();
-      $('#complaint-contact-fields').hidden = true;
+      resetComplaintForm();
       $('#complaint-branch-filter').value = branch;
-      setFeedback($('#complaint-feedback'), `Reclamación #${result.item.id} registrada el ${formatDateTime(result.item.receivedAt)}.`);
+      setFeedback($('#complaint-feedback'), wasEditing
+        ? `Reclamación #${result.item.id} actualizada; el cambio quedó en el historial.`
+        : `Reclamación #${result.item.id} registrada el ${formatDateTime(result.item.receivedAt)}.`);
       await loadComplaints();
     } catch (error) {
       setFeedback($('#complaint-feedback'), error.message, true);
@@ -1206,6 +1286,35 @@ function initialize() {
     }
   });
   $('#complaint-detail-content').addEventListener('click', async (event) => {
+    const editButton = event.target.closest('[data-edit-complaint]');
+    if (editButton) {
+      let complaint;
+      try {
+        const result = await api(`/api/complaints/${Number($('#complaint-detail-dialog').dataset.complaintId)}`);
+        complaint = result.item;
+      } catch (error) {
+        showToast(error.message, 'error');
+        return;
+      }
+      if (!complaint) return;
+      editingComplaintId = complaint.id;
+      complaintForm.elements.namedItem('branch').value = complaint.branch;
+      complaintForm.elements.namedItem('customerName').value = complaint.customerName;
+      complaintForm.elements.namedItem('category').value = complaint.category;
+      complaintForm.elements.namedItem('description').value = complaint.description;
+      const hasContact = Boolean(complaint.contactChannel || complaint.contactValue);
+      complaintContactConsent.checked = hasContact;
+      $('#complaint-contact-fields').hidden = !hasContact;
+      complaintForm.elements.namedItem('contactChannel').value = complaint.contactChannel || '';
+      complaintForm.elements.namedItem('contactValue').value = complaint.contactValue || '';
+      $('.panel-heading h2', complaintForm.closest('.form-panel')).textContent = 'Editar reclamación';
+      $('button[type="submit"]', complaintForm).innerHTML = `${icon('save')} Guardar cambios`;
+      $('#cancel-complaint-edit').hidden = false;
+      setFeedback($('#complaint-feedback'), 'La edición se agregará al historial de la reclamación.');
+      $('#complaint-detail-dialog').close();
+      complaintForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
     const deleteButton = event.target.closest('[data-delete-complaint]');
     if (deleteButton) {
       const complaintId = Number($('#complaint-detail-dialog').dataset.complaintId);
@@ -1268,11 +1377,12 @@ function initialize() {
       productForm.elements.namedItem('name').value = product.name;
       productForm.elements.namedItem('category').value = product.category;
       productForm.elements.namedItem('branch').value = product.branches[0].name;
+      productForm.elements.namedItem('stock').value = String(product.branches[0].stock);
       $('#product-form-eyebrow').textContent = 'ACTUALIZACIÓN DEMO';
       $('#product-dialog-title').textContent = 'Editar producto';
-      $('#product-form-note').textContent = 'Solo se editarán el nombre, la categoría y la sucursal. Las existencias y los movimientos se conservan.';
+      $('#product-form-note').textContent = 'El cambio de existencia registra un movimiento de ajuste.';
       $('button[type="submit"]', productForm).innerHTML = `${icon('save')} <span>Guardar cambios</span>`;
-      $('#product-stock-field').hidden = true;
+      $('#product-stock-field').hidden = false;
       refreshIcons();
       $('#product-dialog').showModal();
       return;
@@ -1299,8 +1409,8 @@ function initialize() {
     if (event.target === event.currentTarget) event.currentTarget.close();
   });
   $('#data-origin').addEventListener('change', (event) => {
-    dataOrigin = event.currentTarget.value;
-    sessionStorage.setItem('rioclaro-data-origin', dataOrigin);
+    dataOrigin = 'practice';
+    event.currentTarget.value = 'practice';
     updateWriteControls();
     loadData();
     void loadSalesReport();
@@ -1317,6 +1427,7 @@ function initialize() {
     $('#product-form-eyebrow').textContent = 'NUEVO REGISTRO';
     $('#product-dialog-title').textContent = 'Agregar producto';
     $('#product-form-note').textContent = 'Se guarda únicamente en el conjunto de Práctica local.';
+    $('#product-stock-field').hidden = false;
     $('button[type="submit"]', productForm).innerHTML = `${icon('plus')} <span>Agregar producto</span>`;
     $('#product-stock-field').hidden = false;
     refreshIcons();
@@ -1333,10 +1444,8 @@ function initialize() {
       ['name', (value) => value.trim() ? '' : 'Ingresa un nombre.'],
       ['category', (value) => value.trim() ? '' : 'Ingresa una categoría.'],
       ['branch', (value) => branches.includes(value) ? '' : 'Selecciona una sucursal válida.'],
+      ['stock', (value) => value.trim() && Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 1_000_000 ? '' : 'Ingresa un entero entre 0 y 1,000,000.'],
     ];
-    if (editingProductId === null) {
-      validators.push(['stock', (value) => value.trim() && Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 1_000_000 ? '' : 'Ingresa un entero entre 0 y 1,000,000.']);
-    }
     if (requestPending || !validateForm(productForm, validators)) return;
     requestPending = true;
     setLoading(productForm, true);
@@ -1346,7 +1455,7 @@ function initialize() {
         category: productForm.elements.namedItem('category').value.trim(),
         branch: productForm.elements.namedItem('branch').value,
       };
-      if (editingProductId === null) payload.stock = Number(productForm.elements.namedItem('stock').value);
+      payload.stock = Number(productForm.elements.namedItem('stock').value);
       const wasEditing = editingProductId !== null;
       await api(wasEditing ? `/api/products/${editingProductId}` : '/api/products', {
         method: wasEditing ? 'PATCH' : 'POST',
@@ -1372,6 +1481,10 @@ function initialize() {
 
   const invoiceForm = $('#invoice-form');
   addInvoiceLine(false);
+  $('#cancel-invoice-edit').addEventListener('click', () => {
+    resetInvoiceForm();
+    setFeedback($('#invoice-feedback'), 'Edición cancelada.');
+  });
   $('#add-invoice-line').addEventListener('click', addInvoiceLine);
   $('#invoice-lines').addEventListener('input', updateInvoiceTotal);
   invoiceForm.elements.namedItem('currency').addEventListener('change', updateInvoiceTotal);
@@ -1383,6 +1496,18 @@ function initialize() {
     }
   });
   $('#invoice-rows').addEventListener('click', (event) => {
+    const editButton = event.target.closest('[data-edit-invoice]');
+    if (editButton) {
+      openInvoiceEdit(Number(editButton.dataset.editInvoice));
+      return;
+    }
+    const historyButton = event.target.closest('[data-invoice-history]');
+    if (historyButton) {
+      const history = $(`[data-invoice-history-content="${historyButton.dataset.invoiceHistory}"]`);
+      history.hidden = !history.hidden;
+      historyButton.setAttribute('aria-expanded', String(!history.hidden));
+      return;
+    }
     const deleteButton = event.target.closest('[data-delete-invoice-id]');
     if (deleteButton) {
       const invoiceId = Number(deleteButton.dataset.deleteInvoiceId);
@@ -1397,6 +1522,7 @@ function initialize() {
     const button = event.target.closest('[data-invoice-review]');
     if (button) openInvoiceReview(Number(button.dataset.invoiceReview));
   });
+  $('#invoice-search')?.addEventListener('input', renderInvoices);
   $('#invoice-review-form').addEventListener('submit', submitInvoiceReview);
   $('#close-invoice-review').addEventListener('click', () => $('#invoice-review-dialog').close());
   $('#cancel-invoice-review').addEventListener('click', () => $('#invoice-review-dialog').close());
@@ -1413,9 +1539,11 @@ function initialize() {
       ['amount', (value) => Number.isFinite(Number(value)) && Number(value) > 0 && Number(value) <= 100_000_000 ? '' : 'Ingresa un importe total válido.'],
       ['currency', (value) => ['MXN', 'USD', 'EUR'].includes(value) ? '' : 'Selecciona una moneda admitida.'],
     ])) return;
-    const items = invoiceLineValues().filter((item) =>
-      item.description || item.quantity !== null || item.unitPrice !== null,
-    );
+    const items = editingInvoiceId === null
+      ? invoiceLineValues().filter((item) =>
+        item.description || item.quantity !== null || item.unitPrice !== null,
+      )
+      : [];
     const invalidItem = items.some((item) =>
       !item.description
       || !Number.isInteger(item.quantity)
@@ -1446,23 +1574,26 @@ function initialize() {
     setLoading(invoiceForm, true);
     setFeedback($('#invoice-feedback'), '');
     try {
-      const result = await api('/api/invoices', { method: 'POST', body: JSON.stringify({
+      const wasEditing = editingInvoiceId !== null;
+      const payload = {
         supplier: invoiceForm.elements.namedItem('supplier').value.trim(),
         reference: invoiceForm.elements.namedItem('reference').value.trim(),
         date: invoiceForm.elements.namedItem('date').value,
         branch: invoiceForm.elements.namedItem('branch').value,
         amount,
         currency: invoiceForm.elements.namedItem('currency').value,
-        items,
-      }) });
+      };
+      if (!wasEditing) payload.items = items;
+      const result = await api(
+        wasEditing ? `/api/invoices/${editingInvoiceId}` : '/api/invoices',
+        { method: wasEditing ? 'PATCH' : 'POST', body: JSON.stringify(payload) },
+      );
       const refreshed = await loadData();
-      invoiceForm.reset();
-      $('#invoice-lines').replaceChildren();
-      addInvoiceLine(false);
-      $('#invoice-document').value = '';
-      updateInvoiceTotal();
+      resetInvoiceForm();
       setFeedback($('#invoice-feedback'), !refreshed
-        ? 'La factura se registró, pero no se pudo actualizar la vista. Recarga los datos para verificarla.'
+        ? `La factura se ${wasEditing ? 'actualizó' : 'registró'}, pero no se pudo actualizar la vista. Recarga los datos para verificarla.`
+        : wasEditing
+          ? 'Factura actualizada; la edición quedó registrada en el historial.'
         : result.possibleDuplicate
           ? 'Posible coincidencia detectada. Requiere revisión de una persona; no se autorizó ningún pago.'
           : 'Registro agregado. La factura queda pendiente de revisión; no se realizó ningún pago.', !refreshed);

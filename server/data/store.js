@@ -37,7 +37,13 @@ const initialInvoices = [
 ];
 
 function readDataFile() {
-  if (!dataFile || !fs.existsSync(dataFile)) return null;
+  if (!dataFile) return null;
+  if (!fs.existsSync(dataFile)) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('El archivo persistente de datos no existe; no se inicializaron datos predeterminados.');
+    }
+    return null;
+  }
   const contents = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
   if (
     ![1, 2, 3].includes(contents?.schemaVersion)
@@ -78,6 +84,7 @@ function persistData() {
   const directory = path.dirname(dataFile);
   fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
   const temporaryFile = `${dataFile}.${process.pid}.tmp`;
+  const backupFile = `${dataFile}.backup`;
   const contents = JSON.stringify({
     schemaVersion: 3,
     nextId,
@@ -94,10 +101,19 @@ function persistData() {
       reviewEvidenceProvided: group.reviewEvidenceProvided,
     }]),
   });
-  fs.writeFileSync(temporaryFile, contents, { encoding: 'utf8', mode: 0o600 });
+  const fileDescriptor = fs.openSync(temporaryFile, 'w', 0o600);
   try {
+    fs.writeFileSync(fileDescriptor, contents, 'utf8');
+    fs.fsyncSync(fileDescriptor);
+    fs.closeSync(fileDescriptor);
+    if (fs.existsSync(dataFile)) fs.copyFileSync(dataFile, backupFile);
     fs.renameSync(temporaryFile, dataFile);
   } catch (error) {
+    try {
+      fs.closeSync(fileDescriptor);
+    } catch (closeError) {
+      if (closeError.code !== 'EBADF') throw closeError;
+    }
     fs.rmSync(temporaryFile, { force: true });
     throw error;
   }
@@ -634,6 +650,7 @@ export function updateProduct({
   name,
   category,
   branch,
+  stock,
   origin = 'practice',
 }) {
   rebuildCanonicalCatalog();
@@ -689,6 +706,18 @@ export function updateProduct({
   product.name = name;
   product.category = category;
   product.branch = branch;
+  if (stock !== undefined && stock !== product.stock) {
+    inventoryMovements.push({
+      id: nextId++,
+      productId,
+      quantity: stock - product.stock,
+      branch,
+      type: 'manual_adjustment',
+      origin,
+      createdAt: new Date().toISOString(),
+    });
+    product.stock = stock;
+  }
   rebuildCanonicalCatalog();
   persistData();
   return structuredClone(product);
@@ -800,6 +829,49 @@ export function listInvoices(origin = 'practice') {
 export function getInvoice(invoiceId, origin = 'practice') {
   const invoice = invoices.find((item) => item.id === invoiceId && item.origin === origin);
   return invoice ? structuredClone(invoice) : null;
+}
+
+export function updateInvoice({
+  invoiceId,
+  supplier,
+  reference,
+  date,
+  amount,
+  currency = 'MXN',
+  branch,
+  origin = 'practice',
+}) {
+  const invoice = invoices.find((item) => item.id === invoiceId && item.origin === origin);
+  if (!invoice) return { error: 'No se encontró la factura.' };
+  if (invoice.inventoryPostedAt || ['confirmed', 'rejected'].includes(invoice.status)) {
+    return { error: 'La factura ya tiene una decisión final o movimientos y no admite cambios.' };
+  }
+  if (inventoryMovements.some((movement) => movement.origin === origin && movement.invoiceId === invoiceId)) {
+    return { error: 'No se puede editar una factura que ya generó movimientos de inventario.' };
+  }
+  if (invoice.items.length && Math.round(amount * 100) !== Math.round(invoice.items.reduce(
+    (total, item) => total + Math.round(item.quantity * item.unitPrice * 100) / 100,
+    0,
+  ) * 100)) {
+    return { error: 'El importe debe coincidir con la suma de las líneas existentes.' };
+  }
+
+  Object.assign(invoice, { supplier, reference, date, amount, currency, branch });
+  const normalize = (value) => normalizeProductName(value);
+  invoice.possibleDuplicate = invoices.some((candidate) =>
+    candidate.id !== invoiceId
+    && candidate.origin === origin
+    && normalize(candidate.supplier) === normalize(supplier)
+    && normalize(candidate.reference) === normalize(reference),
+  );
+  invoice.status = invoice.possibleDuplicate ? 'possible_duplicate' : 'pending_review';
+  invoice.history.push({
+    status: invoice.status,
+    at: new Date().toISOString(),
+    event: 'edited',
+  });
+  persistData();
+  return { item: structuredClone(invoice) };
 }
 
 export function deleteInvoice({ invoiceId, origin = 'practice' }) {
@@ -1140,6 +1212,54 @@ export function createComplaint(payload) {
   complaints = [item, ...complaints];
   persistData();
   return { item: structuredClone(item), created: true };
+}
+
+export function updateComplaint({
+  complaintId,
+  branch,
+  customerName,
+  description,
+  category,
+  contactChannel,
+  contactValue,
+  actor = 'system',
+  origin = 'practice',
+}) {
+  const complaint = complaints.find((item) => item.id === complaintId && item.origin === origin);
+  if (!complaint) return { error: 'No se encontró la reclamación.' };
+  if (!branches.includes(branch)
+    || !customerName?.trim()
+    || !description?.trim()
+    || !category?.trim()) {
+    return { error: 'Sucursal, cliente, categoría y descripción son obligatorios.' };
+  }
+  const changedFields = ['branch', 'customerName', 'description', 'category', 'contactChannel', 'contactValue']
+    .filter((field) => complaint[field] !== (payloadValue(field) ?? null));
+  if (!changedFields.length) return { item: structuredClone(complaint), changed: false };
+
+  Object.assign(complaint, {
+    branch,
+    customerName: customerName.trim(),
+    description: description.trim(),
+    category: category.trim(),
+    contactChannel: contactChannel?.trim() || null,
+    contactValue: contactValue?.trim() || null,
+  });
+  complaint.history.push({
+    status: complaint.status,
+    at: new Date().toISOString(),
+    actor,
+    note: `Información actualizada: ${changedFields.join(', ')}.`,
+    event: 'edited',
+  });
+  persistData();
+  return { item: structuredClone(complaint), changed: true };
+
+  function payloadValue(field) {
+    if (field === 'contactChannel') return contactChannel?.trim() || null;
+    if (field === 'contactValue') return contactValue?.trim() || null;
+    return ({ branch, customerName: customerName.trim(), description: description.trim(), category: category.trim() })[field];
+  }
 }
 
 export function updateComplaintStatus({ complaintId, status, note, actor, origin = 'practice' }) {

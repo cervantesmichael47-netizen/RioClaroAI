@@ -4,6 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadKeyVaultSecrets } from './server/security/secrets.js';
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
+const persistentProductionDataFile = '/home/rioclaro-data/rioclaro-data.json';
 
 function pathsMatch(left, right) {
   const resolvedLeft = path.resolve(left);
@@ -13,28 +14,55 @@ function pathsMatch(left, right) {
     : resolvedLeft === resolvedRight;
 }
 
+function resolvePracticeDataFile(directory, environment = process.env) {
+  const configuredDataFile = environment.RIOCLARO_DATA_FILE?.trim();
+  const configuredEvaluationFile = environment.RIOCLARO_EVALUATION_DATA_FILE?.trim();
+  if (environment.NODE_ENV === 'production') {
+    const configuredPaths = [configuredDataFile, configuredEvaluationFile].filter(Boolean);
+    if (configuredPaths.some((file) =>
+      path.posix.normalize(file.replaceAll('\\', '/')) !== persistentProductionDataFile,
+    )) {
+      throw new Error('RIOCLARO_DATA_FILE y RIOCLARO_EVALUATION_DATA_FILE deben apuntar a /home/rioclaro-data/rioclaro-data.json.');
+    }
+    return persistentProductionDataFile;
+  }
+  return configuredDataFile
+    || configuredEvaluationFile
+    || path.join(directory, 'server', 'data', 'rioclaro-data.json');
+}
+
 async function start() {
+  if (process.env.NODE_ENV === 'production') {
+    process.env.RIOCLARO_EVALUATION_MODE = 'true';
+  }
   const evaluationMode = process.env.RIOCLARO_EVALUATION_MODE === 'true';
   if (evaluationMode) {
-    const evaluationFile = process.env.RIOCLARO_EVALUATION_DATA_FILE?.trim();
     const defaultDataFile = path.join(currentDirectory, 'server', 'data', 'rioclaro-data.json');
+    let configuredEvaluationFile;
+    try {
+      configuredEvaluationFile = resolvePracticeDataFile(currentDirectory);
+    } catch (error) {
+      console.error(error.message);
+      process.exitCode = 1;
+      return;
+    }
     const existingDataFile = process.env.RIOCLARO_OPERATIONAL_DATA_FILE?.trim() || defaultDataFile;
-    if (!evaluationFile || !path.isAbsolute(evaluationFile)) {
-      console.error('El modo de evaluación requiere RIOCLARO_EVALUATION_DATA_FILE con una ruta absoluta dedicada.');
+    if (!path.isAbsolute(configuredEvaluationFile)) {
+      console.error('El modo público requiere una ruta absoluta para el archivo persistente de datos.');
       process.exitCode = 1;
       return;
     }
     const evaluationAuditFile = process.env.RIOCLARO_EVALUATION_AUDIT_FILE?.trim()
-      || `${evaluationFile}.audit.json`;
+      || `${configuredEvaluationFile}.audit.json`;
     const existingAuditFile = process.env.RIOCLARO_OPERATIONAL_AUDIT_FILE?.trim()
       || path.join(currentDirectory, 'server', 'data', 'audit-log.json');
     const defaultAuditFile = path.join(currentDirectory, 'server', 'data', 'audit-log.json');
     const evaluationConversationsFile = process.env.RIOCLARO_EVALUATION_CONVERSATIONS_FILE?.trim()
-      || `${evaluationFile}.foundry-conversations.json`;
+      || `${configuredEvaluationFile}.foundry-conversations.json`;
     const existingConversationsFile = process.env.RIOCLARO_OPERATIONAL_CONVERSATIONS_FILE?.trim()
       || path.join(currentDirectory, 'server', 'data', 'foundry-conversations.json');
     const defaultConversationsFile = path.join(currentDirectory, 'server', 'data', 'foundry-conversations.json');
-    const evaluationFiles = [evaluationFile, evaluationAuditFile, evaluationConversationsFile];
+    const evaluationFiles = [configuredEvaluationFile, evaluationAuditFile, evaluationConversationsFile];
     const operationalFiles = [
       existingDataFile,
       defaultDataFile,
@@ -54,11 +82,12 @@ async function start() {
         pathsMatch(file, operationalFile),
       ))
     ) {
-      console.error('Los datos, auditoría y conversaciones de evaluación deben usar archivos absolutos dedicados.');
+      console.error('Los datos, auditoría y conversaciones de práctica deben usar archivos absolutos dedicados.');
       process.exitCode = 1;
       return;
     }
-    process.env.RIOCLARO_DATA_FILE = evaluationFile;
+    process.env.RIOCLARO_EVALUATION_DATA_FILE = configuredEvaluationFile;
+    process.env.RIOCLARO_DATA_FILE = configuredEvaluationFile;
     process.env.RIOCLARO_AUDIT_FILE = evaluationAuditFile;
     process.env.FOUNDRY_CONVERSATIONS_FILE = evaluationConversationsFile;
   }
@@ -95,3 +124,4 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
 }
 
 export { start };
+export { resolvePracticeDataFile };

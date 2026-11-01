@@ -67,3 +67,11 @@ Desarrollar una plataforma inteligente que facilite la gestión de información 
   <br><br>
   **MGRC**
 </p>
+
+## Persistencia en Azure App Service
+
+En producción, los datos de práctica usan exclusivamente `/home/rioclaro-data/rioclaro-data.json`. Configura `RIOCLARO_DATA_FILE` con esa ruta. `RIOCLARO_EVALUATION_DATA_FILE` debe quedar sin configurar o usar exactamente la misma ruta; si alguna variable apunta a otro archivo, el servidor se detiene en lugar de elegir silenciosamente un almacenamiento alternativo. El servidor no crea datos predeterminados en producción si el archivo falta.
+
+El archivo de datos vive fuera del paquete de la aplicación y no debe agregarse al repositorio ni incluirse en los artefactos de despliegue. Los workflows empaquetan únicamente el código y dependencias requeridos.
+
+El almacenamiento JSON no coordina escrituras simultáneas entre procesos o instancias. Mantén el App Service con una sola instancia mientras se use este almacenamiento; antes de escalar horizontalmente, migra a una base de datos transaccional.

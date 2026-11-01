@@ -569,3 +569,45 @@ test('unauthenticated local practice can add products and invoices; operational 
     else process.env.NODE_ENV = previousEnvironment;
   }
 });
+
+test('authenticated demo writes still enforce application roles and branch scope', async () => {
+  const app = await createApp({ evaluationMode: true });
+  const product = await request(app).post('/api/products').send({
+    name: 'Producto de alcance protegido',
+    category: 'Prueba',
+    branch: 'Guadalajara',
+    stock: 3,
+  }).expect(201);
+  const invoice = await request(app).post('/api/invoices').send({
+    ...validInvoice,
+    reference: 'SCOPE-2026-001',
+    branch: 'Guadalajara',
+  }).expect(201);
+  const complaint = await request(app).post('/api/complaints').send({
+    branch: 'Guadalajara',
+    customerName: 'Cliente de prueba',
+    description: 'Caso para validar permisos de sucursal.',
+    category: 'Prueba',
+  }).expect(201);
+
+  await request(app).patch(`/api/products/${product.body.item.id}`).set(auth('accountsPayable'))
+    .send({
+      name: product.body.item.name,
+      category: product.body.item.category,
+      branch: product.body.item.branch,
+    }).expect(403);
+  await request(app).delete(`/api/products/${product.body.item.id}`).set(auth('accountsPayable')).expect(403);
+  await request(app).delete(`/api/products/${product.body.item.id}`).set(auth('branchManager')).expect(403);
+  await request(app).patch(`/api/invoices/${invoice.body.item.id}`).set(auth('warehouse'))
+    .send({
+      supplier: 'Proveedor actualizado',
+      reference: 'SCOPE-2026-001',
+      date: validInvoice.date,
+      amount: validInvoice.amount,
+      branch: 'Guadalajara',
+      currency: 'MXN',
+    }).expect(403);
+  await request(app).delete(`/api/invoices/${invoice.body.item.id}`).set(auth('warehouse')).expect(403);
+  await request(app).delete(`/api/complaints/${complaint.body.item.id}`).set(auth('accountsPayable')).expect(403);
+  await request(app).delete(`/api/complaints/${complaint.body.item.id}`).set(auth('branchManager')).expect(403);
+});

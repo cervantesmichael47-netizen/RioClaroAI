@@ -21,6 +21,30 @@ async function createApp(options = {}) {
   return factory({ tokenVerifier, ...options });
 }
 
+test('production practice data path is canonical and conflicting environment variables are rejected', async () => {
+  const { resolvePracticeDataFile } = await import('../server.js');
+  const productionPath = '/home/rioclaro-data/rioclaro-data.json';
+  assert.equal(resolvePracticeDataFile('C:\\app', {
+    NODE_ENV: 'production',
+    RIOCLARO_DATA_FILE: productionPath,
+    RIOCLARO_EVALUATION_DATA_FILE: productionPath,
+  }), productionPath);
+  assert.equal(resolvePracticeDataFile('C:\\app', {
+    NODE_ENV: 'production',
+    RIOCLARO_DATA_FILE: productionPath,
+  }), productionPath);
+  assert.throws(() => resolvePracticeDataFile('C:\\app', {
+    NODE_ENV: 'production',
+    RIOCLARO_DATA_FILE: productionPath,
+    RIOCLARO_EVALUATION_DATA_FILE: 'C:\\home\\other.json',
+  }), /deben apuntar a \/home\/rioclaro-data\/rioclaro-data\.json/);
+  assert.equal(resolvePracticeDataFile('C:\\app', {
+    NODE_ENV: 'test',
+    RIOCLARO_DATA_FILE: 'C:\\data\\primary.json',
+    RIOCLARO_EVALUATION_DATA_FILE: 'C:\\data\\secondary.json',
+  }), 'C:\\data\\primary.json');
+});
+
 test('root serves the dashboard without cookies, login, or a profile picker', async () => {
   const app = await createApp({ evaluationMode: true });
   const page = await request(app).get('/').expect(200);
@@ -136,6 +160,16 @@ test('evaluation complaints persist with their history and invoice writes stay i
     .set('X-Data-Origin', 'operational').expect(200);
   assert.equal(detail.body.item.origin, 'practice');
   assert.equal(detail.body.item.history.length, 2);
+  const editedComplaint = await request(evaluationApp).patch(`/api/complaints/${created.body.item.id}`)
+    .set('X-Data-Origin', 'operational')
+    .send({
+      branch: 'Zapopan',
+      customerName: 'Cliente sintético actualizado',
+      description: 'Caso de evaluación independiente actualizado.',
+      category: 'Seguimiento',
+    }).expect(200);
+  assert.equal(editedComplaint.body.item.customerName, 'Cliente sintético actualizado');
+  assert.equal(editedComplaint.body.item.history.at(-1).event, 'edited');
 
   const invoice = await request(evaluationApp).post('/api/invoices')
     .set('X-Data-Origin', 'operational')
@@ -148,6 +182,18 @@ test('evaluation complaints persist with their history and invoice writes stay i
     .expect(201);
   assert.equal(invoice.body.origin, 'practice');
   assert.equal((await request(evaluationApp).get('/api/invoices').expect(200)).body.origin, 'practice');
+  const editedInvoice = await request(evaluationApp).patch(`/api/invoices/${invoice.body.item.id}`)
+    .set('X-Data-Origin', 'operational')
+    .send({
+      supplier: 'Proveedor sintético actualizado',
+      reference: 'EVAL-2026-002',
+      date: '2026-10-30',
+      branch: 'Zapopan',
+      amount: 25,
+      currency: 'MXN',
+    }).expect(200);
+  assert.equal(editedInvoice.body.item.supplier, 'Proveedor sintético actualizado');
+  assert.equal(editedInvoice.body.item.history.at(-1).event, 'edited');
 });
 
 test('evaluation complaint data survives a server restart in its dedicated files', () => {
@@ -275,20 +321,43 @@ test('public demo permanently deletes only synthetic records and protects invent
   assert.equal(updatedProduct.body.item.category, 'Prueba actualizada');
   assert.equal(updatedProduct.body.item.branch, 'León');
   assert.equal(updatedProduct.body.item.stock, 5);
-  const rejectedStockEdit = await request(app).patch(`/api/products/${productId}`)
+  const invalidStockEdit = await request(app).patch(`/api/products/${productId}`)
     .set(originHeader)
     .send({
       name: 'Producto sintético actualizado',
       category: 'Prueba actualizada',
       branch: 'León',
-      stock: 100,
+      stock: 1_000_001,
     }).expect(400);
-  assert.match(rejectedStockEdit.body.error, /no se permiten otros campos/i);
+  assert.match(invalidStockEdit.body.error, /existencia debe ser un entero/i);
   const deletedProduct = await request(app).delete(`/api/products/${productId}`)
     .set(originHeader).expect(200);
   assert.deepEqual(deletedProduct.body, { deleted: true, count: 1, origin: 'practice' });
   const productsAfterDelete = await request(app).get('/api/products').expect(200);
   assert.ok(productsAfterDelete.body.items.every((item) => item.id !== productId));
+
+  const adjustedProduct = await request(app).post('/api/products').set(originHeader).send({
+    name: 'Producto sintético con ajuste manual',
+    category: 'Prueba',
+    branch: 'Aguascalientes',
+    stock: 2,
+  }).expect(201);
+  const adjustment = await request(app).patch(`/api/products/${adjustedProduct.body.item.id}`)
+    .set(originHeader)
+    .send({
+      name: adjustedProduct.body.item.name,
+      category: adjustedProduct.body.item.category,
+      branch: adjustedProduct.body.item.branch,
+      stock: 7,
+    }).expect(200);
+  assert.equal(adjustment.body.item.stock, 7);
+  const productDetails = await request(app).get(`/api/products/${adjustedProduct.body.item.id}`)
+    .set(originHeader).expect(200);
+  assert.ok(productDetails.body.movements.some((movement) =>
+    movement.type === 'manual_adjustment' && movement.quantity === 5,
+  ));
+  await request(app).delete(`/api/products/${adjustedProduct.body.item.id}`)
+    .set(originHeader).expect(409);
 
   const invoice = await request(app).post('/api/invoices').set(originHeader).send({
     supplier: 'Proveedor sintético para eliminar',
@@ -399,6 +468,8 @@ test('production evaluation mode serves and writes only isolated practice data w
     const status = await request(app).get('/api/security/status').set(headers).expect(200);
     assert.equal(status.body.evaluationMode, true);
     assert.equal(status.body.practiceWritesEnabled, false);
+    await request(app).get('/api/products').set(headers)
+      .set('Authorization', 'Bearer invalid-evaluation-token').expect(401);
 
     const products = await request(app).get('/api/products')
       .set(headers).set('X-Data-Origin', 'operational').expect(200);

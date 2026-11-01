@@ -16,12 +16,16 @@ test('serves the complaint workflow and connects its controls to the existing AP
   assert.match(page.text, /aria-live="polite"/);
 
   const script = await request(app).get('/app.js').expect(200);
-  assert.match(script.text, /api\('\/api\/complaints'/);
+  assert.ok(script.text.includes("wasEditing ? `/api/complaints/${editingComplaintId}` : '/api/complaints'"));
   assert.match(script.text, /\/api\/complaints\/\$\{complaintId\}\/status/);
   assert.match(script.text, /\/api\/complaints\/\$\{complaintId\}\/response/);
+  assert.match(script.text, /cancel-complaint-edit/);
   assert.match(script.text, /data-draft-response/);
   assert.match(script.text, /name="humanApproved"/);
   assert.match(script.text, /humanApproved: form\.elements\.namedItem\('humanApproved'\)\.checked/);
   assert.match(script.text, /item\.branch !== branch/);
   assert.match(script.text, /item\.branch !== selectedBranch/);
+  assert.match(page.text, /id="cancel-complaint-edit"/);
+  assert.match(page.text, /id="invoice-search"/);
+  assert.match(page.text, /id="cancel-invoice-edit"/);
 });

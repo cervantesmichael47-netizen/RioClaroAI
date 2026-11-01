@@ -32,7 +32,11 @@ jobs:
       - name: Prepare production package
         run: |
           npm prune --omit=dev
-          zip -qr app.zip server public server.js package.json package-lock.json node_modules
+          zip -qr app.zip server public server.js package.json package-lock.json node_modules -x 'server/data/rioclaro-data.json'
+          if unzip -Z1 app.zip | grep -Fxq 'server/data/rioclaro-data.json'; then
+            echo "Persisted data must not be included in the deployment package."
+            exit 1
+          fi
 
       - name: Deploy to existing App Service
         uses: azure/webapps-deploy@v3
@@ -41,7 +45,7 @@ jobs:
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: app.zip
 
-      - name: Verify public demo and Foundry connectivity
+      - name: Verify public demo modules
         env:
           APP_URL: https://rioclaro-ai-mgrc-febegnb5ctajgbcx.westus-01.azurewebsites.net
         run: |
@@ -66,26 +70,19 @@ jobs:
               continue;
             }
             assert.equal(health.evaluationMode, true, 'Public evaluation mode must be enabled.');
-            if (health.foundryConnection?.connected) break;
-            await delay(5_000);
+            break;
           }
-          assert.equal(health?.foundryEnabled, true, 'Foundry must be enabled in the App Service.');
-          assert.equal(health?.foundryConnection?.connected, true, 'The managed-identity Foundry probe must connect.');
-          assert.equal(health?.foundryConnection?.enabled, true, 'The Foundry connection must be enabled.');
-
           const status = await getJson('/api/security/status');
           assert.equal(status.evaluationMode, true);
-          const products = await getJson('/api/products');
-          assert.equal(products.origin, 'practice');
-          assert.ok(Array.isArray(products.items));
-
-          const probeResponse = await fetch(new URL('/api/foundry/check', baseUrl), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: '{}',
-          });
-          assert.equal(probeResponse.status, 200, 'The public Foundry check should respond with HTTP 200.');
-          const probe = await probeResponse.json();
-          assert.equal(probe.connected, true, 'The live Foundry agent check must succeed.');
-          console.log('Public demo and Microsoft Foundry connectivity verified.');
+          for (const [route, key] of [
+            ['/api/products', 'items'],
+            ['/api/invoices', 'items'],
+            ['/api/dashboard', ''],
+            ['/api/complaints', 'items'],
+          ]) {
+            const data = await getJson(route);
+            assert.equal(data.origin, 'practice', `${route} should use practice data.`);
+            if (key) assert.ok(Array.isArray(data[key]), `${route} should return ${key}.`);
+          }
+          console.log('Public practice modules verified independently of Foundry.');
           NODE

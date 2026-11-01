@@ -27,7 +27,9 @@ import {
   resetPracticeData,
   reviewInvoice,
   createComplaint,
+  updateComplaint,
   updateComplaintStatus,
+  updateInvoice,
   updateProduct,
   addComplaintResponse,
 } from './data/store.js';
@@ -330,6 +332,19 @@ export function createApp({
     legacyHeaders: false,
     handler: rateLimitHandler,
   }));
+  const publicWriteRateLimit = rateLimit({
+    windowMs: 60_000,
+    limit: 20,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    handler: rateLimitHandler,
+  });
+  app.use('/api', (request, response, next) => {
+    if (['POST', 'PATCH', 'DELETE'].includes(request.method) && !request.path.startsWith('/admin/')) {
+      return publicWriteRateLimit(request, response, next);
+    }
+    return next();
+  });
   app.use('/api', (_request, response, next) => {
     response.setHeader('Cache-Control', 'no-store');
     response.setHeader('Pragma', 'no-cache');
@@ -453,7 +468,7 @@ export function createApp({
     if (origin === 'operational' && !request.identity.roles.includes('Administrator')) {
       return response.status(403).json({ error: 'Solo un administrador puede consultar el resumen operativo.' });
     }
-    response.json(getDashboard({ origin }));
+    response.json({ ...getDashboard({ origin }), origin });
   });
 
   function getAuthorizedSalesReport(request, response) {
@@ -691,7 +706,7 @@ export function createApp({
     response.status(201).json({ item, origin });
   });
 
-  app.patch('/api/products/:productId', requireEvaluationMode, (request, response) => {
+  app.patch('/api/products/:productId', requireEvaluationMode, evaluationOrRoles(...productRoles), (request, response) => {
     const origin = getDataOrigin(request, response);
     if (!origin) return;
     const productId = Number(request.params.productId);
@@ -700,15 +715,16 @@ export function createApp({
     }
 
     const body = request.body ?? {};
-    const allowedFields = ['name', 'category', 'branch'];
+    const requiredFields = ['name', 'category', 'branch'];
     if (
       !body
       || typeof body !== 'object'
       || Array.isArray(body)
-      || Object.keys(body).some((field) => !allowedFields.includes(field))
-      || !allowedFields.every((field) => typeof body[field] === 'string' && body[field].trim())
+      || Object.keys(body).some((field) => ![...requiredFields, 'stock'].includes(field))
+      || !requiredFields.every((field) => typeof body[field] === 'string' && body[field].trim())
+      || (body.stock !== undefined && (!Number.isInteger(body.stock) || body.stock < 0 || body.stock > 1_000_000))
     ) {
-      return response.status(400).json({ error: 'Nombre, categoría y sucursal son obligatorios; no se permiten otros campos.' });
+      return response.status(400).json({ error: 'Nombre, categoría y sucursal son obligatorios; la existencia debe ser un entero entre 0 y 1,000,000.' });
     }
     const { name, category, branch } = body;
     if (!branches.includes(branch.trim())) {
@@ -716,6 +732,13 @@ export function createApp({
     }
     if (name.trim().length > 100 || category.trim().length > 80 || branch.trim().length > 80) {
       return response.status(400).json({ error: 'Revisa la longitud de los campos.' });
+    }
+    const existing = getProductDetails({ productId, origin, includeInvoiceReferences: false });
+    if (!existing) return response.status(404).json({ error: 'No se encontró el producto.' });
+    if (request.identity && !request.identity.roles.includes('Administrator')
+      && existing.item.branches.some((item) => !branchIsAllowed(request.identity, item.name))) {
+      recordAudit('demo_product_update', 'denied', request.identity.userId, 'branch_scope_denied');
+      return response.status(403).json({ error: 'No tienes permiso para modificar productos de otra sucursal.' });
     }
     if (request.identity && !branchIsAllowed(request.identity, branch.trim())) {
       recordAudit('demo_product_update', 'denied', request.identity.userId, 'branch_scope_denied');
@@ -727,6 +750,7 @@ export function createApp({
       name: name.trim(),
       category: category.trim(),
       branch: branch.trim(),
+      ...(body.stock !== undefined ? { stock: body.stock } : {}),
       origin,
     });
     if (result.error) {
@@ -738,12 +762,19 @@ export function createApp({
     response.json({ item: result, origin });
   });
 
-  app.delete('/api/products/:productId', requireEvaluationMode, (request, response) => {
+  app.delete('/api/products/:productId', requireEvaluationMode, evaluationOrRoles(...productRoles), (request, response) => {
     const origin = getDataOrigin(request, response);
     if (!origin) return;
     const productId = Number(request.params.productId);
     if (!Number.isSafeInteger(productId) || productId < 1) {
       return response.status(400).json({ error: 'El identificador del producto no es válido.' });
+    }
+    const existing = getProductDetails({ productId, origin, includeInvoiceReferences: false });
+    if (!existing) return response.status(404).json({ error: 'No se encontró el producto.' });
+    if (request.identity && !request.identity.roles.includes('Administrator')
+      && existing.item.branches.some((item) => !branchIsAllowed(request.identity, item.name))) {
+      recordAudit('demo_product_delete', 'denied', request.identity.userId, 'branch_scope_denied');
+      return response.status(403).json({ error: 'No tienes permiso para eliminar productos de otra sucursal.' });
     }
     const result = deleteProduct({ productId, origin });
     if (result.error) {
@@ -796,7 +827,15 @@ export function createApp({
       recordAudit('invoice_read', 'denied', request.identity.userId, 'role_denied');
       return response.status(403).json({ error: 'Tu rol no tiene permiso para consultar facturas.' });
     }
-    response.json({ items: listInvoices(origin), origin });
+    const search = typeof request.query.search === 'string' ? request.query.search.trim().toLocaleLowerCase('es-MX') : '';
+    if (search.length > 100) {
+      return response.status(400).json({ error: 'La búsqueda no puede superar 100 caracteres.' });
+    }
+    const items = listInvoices(origin).filter((invoice) =>
+      [invoice.reference, invoice.supplier, invoice.date]
+        .some((value) => String(value ?? '').toLocaleLowerCase('es-MX').includes(search)),
+    );
+    response.json({ items, origin });
   });
 
   app.post('/api/invoices/extract', rateLimit({
@@ -983,7 +1022,47 @@ export function createApp({
     response.status(result.created ? 201 : 200).json({ ...result, origin });
   });
 
-  app.delete('/api/invoices/:invoiceId', requireEvaluationMode, (request, response) => {
+  app.patch('/api/invoices/:invoiceId', requireEvaluationMode, evaluationOrRoles(...invoiceRoles), (request, response) => {
+    const origin = getDataOrigin(request, response);
+    if (!origin) return;
+    const invoiceId = Number(request.params.invoiceId);
+    if (!Number.isSafeInteger(invoiceId) || invoiceId < 1) {
+      return response.status(400).json({ error: 'El identificador de factura no es válido.' });
+    }
+    const { supplier, reference, date, amount, branch, currency } = request.body ?? {};
+    if (Object.keys(request.body ?? {}).some((key) =>
+      !['supplier', 'reference', 'date', 'amount', 'branch', 'currency'].includes(key))
+      || ![supplier, reference, date, branch].every((value) => typeof value === 'string' && value.trim())
+      || supplier.trim().length > 120
+      || reference.trim().length > 80
+      || !isValidInvoiceDate(date)
+      || !branches.includes(branch)
+      || typeof amount !== 'number'
+      || !Number.isFinite(amount)
+      || amount <= 0
+      || amount > 100_000_000
+      || (currency !== undefined && !['MXN', 'USD', 'EUR'].includes(currency))) {
+      return response.status(400).json({ error: 'Revisa proveedor, folio, fecha, sucursal, importe y moneda.' });
+    }
+    const result = updateInvoice({
+      invoiceId,
+      supplier: supplier.trim(),
+      reference: reference.trim(),
+      date,
+      amount: Math.round(amount * 100) / 100,
+      branch,
+      currency: currency ?? 'MXN',
+      origin,
+    });
+    if (result.error) {
+      const status = result.error === 'No se encontró la factura.' ? 404 : 409;
+      return response.status(status).json({ error: result.error });
+    }
+    recordAudit('demo_invoice_update', 'success', request.identity?.userId ?? null, `invoice:${invoiceId}`);
+    response.json({ ...result, origin });
+  });
+
+  app.delete('/api/invoices/:invoiceId', requireEvaluationMode, evaluationOrRoles(...invoiceRoles), (request, response) => {
     const origin = getDataOrigin(request, response);
     if (!origin) return;
     const invoiceId = Number(request.params.invoiceId);
@@ -1031,6 +1110,30 @@ export function createApp({
     const origin = getDataOrigin(request, response);
     if (!origin) return;
     const { branch, customerName, description, category, contactChannel, contactValue } = request.body ?? {};
+    const allowedFields = ['branch', 'customerName', 'description', 'category', 'contactChannel', 'contactValue'];
+    if (Object.keys(request.body ?? {}).some((key) => !allowedFields.includes(key))
+      || typeof branch !== 'string'
+      || !branches.includes(branch.trim())
+      || typeof customerName !== 'string'
+      || !customerName.trim()
+      || customerName.trim().length > 120
+      || typeof description !== 'string'
+      || !description.trim()
+      || description.trim().length > 2000
+      || typeof category !== 'string'
+      || !category.trim()
+      || category.trim().length > 80
+      || (contactChannel !== undefined && (
+        typeof contactChannel !== 'string'
+        || contactChannel.trim().length > 60
+      ))
+      || (contactValue !== undefined && (
+        typeof contactValue !== 'string'
+        || contactValue.trim().length > 200
+      ))
+      || Boolean(contactChannel?.trim()) !== Boolean(contactValue?.trim())) {
+      return response.status(400).json({ error: 'Revisa la sucursal, cliente, categoría, descripción y datos de contacto.' });
+    }
     if (!authorizeComplaintAccess(request, response, origin, branch, true)) return;
     const payload = {
       origin,
@@ -1047,13 +1150,59 @@ export function createApp({
     response.status(201).json({ item: result.item, origin });
   });
 
-  app.delete('/api/complaints/:complaintId', requireEvaluationMode, (request, response) => {
+  app.patch('/api/complaints/:complaintId', (request, response) => {
     const origin = getDataOrigin(request, response);
     if (!origin) return;
     const complaintId = Number(request.params.complaintId);
     if (!Number.isSafeInteger(complaintId) || complaintId < 1) {
       return response.status(400).json({ error: 'El identificador de reclamación no es válido.' });
     }
+    const {
+      branch, customerName, description, category, contactChannel, contactValue,
+    } = request.body ?? {};
+    const allowedFields = ['branch', 'customerName', 'description', 'category', 'contactChannel', 'contactValue'];
+    if (Object.keys(request.body ?? {}).some((key) => !allowedFields.includes(key))
+      || ![branch, customerName, description, category].every((value) => typeof value === 'string' && value.trim())
+      || customerName.trim().length > 120
+      || description.trim().length > 2000
+      || category.trim().length > 80
+      || (contactChannel !== undefined && (typeof contactChannel !== 'string' || contactChannel.length > 60))
+      || (contactValue !== undefined && (typeof contactValue !== 'string' || contactValue.length > 200))
+      || Boolean(contactChannel?.trim()) !== Boolean(contactValue?.trim())) {
+      return response.status(400).json({ error: 'Revisa la sucursal, cliente, categoría, descripción y datos de contacto.' });
+    }
+    const existing = getComplaint(complaintId, origin);
+    if (!existing) return response.status(404).json({ error: 'No se encontró la reclamación.' });
+    if (!authorizeComplaintAccess(request, response, origin, existing.branch, true)) return;
+    if (!authorizeComplaintAccess(request, response, origin, branch, true)) return;
+    const result = updateComplaint({
+      complaintId,
+      branch: branch.trim(),
+      customerName,
+      description,
+      category,
+      contactChannel,
+      contactValue,
+      actor: request.identity?.userId ?? 'public-demo',
+      origin,
+    });
+    if (result.error) {
+      const status = result.error === 'No se encontró la reclamación.' ? 404 : 400;
+      return response.status(status).json({ error: result.error });
+    }
+    response.json({ ...result, origin });
+  });
+
+  app.delete('/api/complaints/:complaintId', requireEvaluationMode, evaluationOrRoles(...complaintRoles), (request, response) => {
+    const origin = getDataOrigin(request, response);
+    if (!origin) return;
+    const complaintId = Number(request.params.complaintId);
+    if (!Number.isSafeInteger(complaintId) || complaintId < 1) {
+      return response.status(400).json({ error: 'El identificador de reclamación no es válido.' });
+    }
+    const existing = getComplaint(complaintId, origin);
+    if (!existing) return response.status(404).json({ error: 'No se encontró la reclamación.' });
+    if (!authorizeComplaintAccess(request, response, origin, existing.branch)) return;
     const result = deleteComplaint({ complaintId, origin });
     if (result.error) {
       recordAudit('demo_complaint_delete', 'denied', request.identity?.userId ?? null, `complaint:${complaintId}`);
