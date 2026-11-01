@@ -6,38 +6,78 @@ Demostración pública de una arquitectura basada en Node.js, Microsoft Azure e 
 
 ---
 
-## Galería del proyecto
+---
 
-Explora la interfaz y los principales módulos de RÍO CLARO AI.
+# EXPERIENCIA VISUAL
 
-### Página principal
+Descubre los módulos, herramientas y funcionalidades de **RÍO CLARO AI**.
 
-| Inicio | Sección inferior |
-|:---:|:---:|
-| ![Río Claro AI](public/images/rioclaro_inicio.png) | ![Río Claro AI - Sección inferior](public/images/rioclaro_inicio_abajo.png) |
+## 01 — Página principal
 
-### Gestión empresarial
+<p align="center">
+  <img src="public/images/rioclaro_inicio.png" width="100%" alt="Página principal de Río Claro AI">
+</p>
 
-| Inventario | Registro de productos |
-|:---:|:---:|
-| ![Inventario](public/images/inventario.png) | ![Agregar producto](public/images/agregar_producto.png) |
+## 02 — Experiencia completa
 
-| Reclamaciones | Facturas |
-|:---:|:---:|
-| ![Reclamaciones](public/images/reclamaciones.png) | ![Facturas](public/images/facturas.png) |
+<p align="center">
+  <img src="public/images/rioclaro_inicio_abajo.png" width="100%" alt="Vista inferior de la página principal">
+</p>
 
-| Documentación | Acerca de RÍO CLARO AI |
-|:---:|:---:|
-| ![Documentación](public/images/documentacion.png) | ![Acerca de Río Claro](public/images/acerca_rioclaro.png) |
+## 03 — Gestión de inventario
 
-### Inteligencia artificial
+<p align="center">
+  <img src="public/images/inventario.png" width="100%" alt="Módulo de inventario">
+</p>
 
-| Asistente de IA | IA responsable |
-|:---:|:---:|
-| ![Asistente de IA](public/images/asistente_ia.png) | ![IA responsable](public/images/ia_responsable.png) |
+## 04 — Registro de productos
+
+<p align="center">
+  <img src="public/images/agregar_producto.png" width="100%" alt="Formulario para agregar productos">
+</p>
+
+## 05 — Gestión de reclamaciones
+
+<p align="center">
+  <img src="public/images/reclamaciones.png" width="100%" alt="Módulo de reclamaciones">
+</p>
+
+## 06 — Gestión de facturas
+
+<p align="center">
+  <img src="public/images/facturas.png" width="100%" alt="Módulo de facturas">
+</p>
+
+## 07 — Documentación
+
+<p align="center">
+  <img src="public/images/documentacion.png" width="100%" alt="Documentación de Río Claro AI">
+</p>
+
+## 08 — Asistente de inteligencia artificial
+
+<p align="center">
+  <img src="public/images/asistente_ia.png" width="100%" alt="Asistente de inteligencia artificial">
+</p>
+
+## 09 — Inteligencia artificial responsable
+
+<p align="center">
+  <img src="public/images/ia_responsable.png" width="100%" alt="Apartado de inteligencia artificial responsable">
+</p>
+
+## 10 — Acerca del proyecto
+
+<p align="center">
+  <img src="public/images/acerca_rioclaro.png" width="100%" alt="Información sobre Río Claro AI">
+</p>
 
 ---
 
+<p align="center">
+  <strong>RÍO CLARO AI</strong><br>
+  Inteligencia operativa · Gestión empresarial · Microsoft Foundry
+</p>
 ## Alcance y arquitectura
 
 - **Frontend:** aplicación web estática en `public/`, con diseño adaptable a escritorio y móvil.
