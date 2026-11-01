@@ -199,6 +199,8 @@ h2 { margin-bottom: 0; font-size: 16px; font-weight: 650; letter-spacing: -.3px;
 .select-field select option {background: #FFFFFF; color: var(--text); }
 .select-field > svg { position: absolute; right: 8px; pointer-events: none; }
 .table-wrap { width: 100%; overflow-x: auto; }
+.product-row-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+#product-stock-field[hidden] { display: none; }
 table { width: 100%; border-collapse: collapse; text-align: left; }
 thead {background: #FFFFFF; }
 th { padding: 11px 14px; color: #39875A; font-size: 8px; font-weight: 700; letter-spacing: .85px; white-space: nowrap; }

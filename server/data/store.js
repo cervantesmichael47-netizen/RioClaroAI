@@ -432,25 +432,35 @@ export function listProducts({
   });
 }
 
-export function inspectProductRegistration({ name, category, branch, origin = 'practice' }) {
+export function inspectProductRegistration({
+  name,
+  category,
+  branch,
+  origin = 'practice',
+  excludeProductId,
+}) {
   rebuildCanonicalCatalog();
   const normalizedName = normalizeProductName(name);
   const exactCandidates = products.filter((product) =>
-    product.origin === origin && product.normalizedName === normalizedName,
+    product.origin === origin
+    && product.id !== excludeProductId
+    && product.normalizedName === normalizedName,
   );
   const definition = equivalenceDefinitionForName(name);
   const group = definition ? equivalenceGroups.get(`${origin}:${definition.id}`) : null;
-  if (group?.candidateProductIds.length && !groupIsFullyConfirmed(group)) {
+  const groupCandidateIds = group?.candidateProductIds
+    .filter((id) => id !== excludeProductId) ?? [];
+  if (groupCandidateIds.length && !groupIsFullyConfirmed(group)) {
     return {
       reviewRequired: true,
       canonicalName: group.canonicalName,
-      candidateIds: [...group.candidateProductIds],
+      candidateIds: groupCandidateIds,
       reason: 'equivalence_pending_human_review',
     };
   }
 
-  const candidates = group?.candidateProductIds.length
-    ? group.candidateProductIds.map((id) => products.find((product) => product.id === id)).filter(Boolean)
+  const candidates = groupCandidateIds.length
+    ? groupCandidateIds.map((id) => products.find((product) => product.id === id)).filter(Boolean)
     : exactCandidates;
   if (candidates.length) {
     const incompatible = candidates.some((product) =>
@@ -619,6 +629,113 @@ export function addProduct(product) {
   return { ...item, duplicate: false, requiresHumanReview: false };
 }
 
+export function updateProduct({
+  productId,
+  name,
+  category,
+  branch,
+  origin = 'practice',
+}) {
+  rebuildCanonicalCatalog();
+  const product = products.find((item) => item.id === productId && item.origin === origin);
+  if (!product) return { error: 'No se encontró el producto.' };
+
+  const canonicalRecord = canonicalProducts.find((record) =>
+    record.id === product.canonicalProductId && record.origin === origin,
+  );
+  if (
+    !canonicalRecord
+    || canonicalRecord.memberIds.length !== 1
+    || product.normalizationStatus !== 'normalized'
+  ) {
+    return { error: 'Este producto pertenece a un grupo de equivalencias y requiere revisión antes de editarse.' };
+  }
+
+  const hasInventoryHistory = inventoryMovements.some((movement) =>
+    movement.origin === origin && movement.productId === productId,
+  );
+  const hasInvoiceReferences = invoices.some((invoice) =>
+    invoice.origin === origin && (invoice.items ?? []).some((item) =>
+      item.productId === productId || item.postedProductId === productId,
+    ),
+  );
+  if (branch !== product.branch && (hasInventoryHistory || hasInvoiceReferences)) {
+    return { error: 'No se puede cambiar la sucursal de un producto con movimientos o referencias de factura.' };
+  }
+  if (
+    normalizeProductName(name) !== product.normalizedName
+    && equivalenceDefinitionForName(name)
+  ) {
+    return { error: 'El nuevo nombre coincide con una equivalencia que requiere revisión humana.' };
+  }
+
+  const registration = inspectProductRegistration({
+    name,
+    category,
+    branch,
+    origin,
+    excludeProductId: productId,
+  });
+  if (registration.reviewRequired) {
+    return { error: 'El cambio requiere revisión humana antes de asociarse con otro producto.' };
+  }
+  if (registration.duplicate) {
+    return { error: 'Ya existe un producto equivalente en esta sucursal.' };
+  }
+  if (registration.canonicalProductId || registration.equivalenceGroupId) {
+    return { error: 'El cambio no puede agrupar productos ni existencias automáticamente.' };
+  }
+
+  product.name = name;
+  product.category = category;
+  product.branch = branch;
+  rebuildCanonicalCatalog();
+  persistData();
+  return structuredClone(product);
+}
+
+export function deleteProduct({ productId, origin = 'practice' }) {
+  rebuildCanonicalCatalog();
+  const product = products.find((item) => item.id === productId && item.origin === origin);
+  if (!product) return { error: 'No se encontró el producto.' };
+
+  const canonicalProductId = product.canonicalProductId ?? product.id;
+  const memberIds = new Set(products
+    .filter((item) => item.origin === origin
+      && (item.canonicalProductId ?? item.id) === canonicalProductId)
+    .map((item) => item.id));
+  const hasInventoryHistory = inventoryMovements.some((movement) =>
+    movement.origin === origin && memberIds.has(movement.productId),
+  );
+  const hasInvoiceReferences = invoices.some((invoice) =>
+    invoice.origin === origin && (invoice.items ?? []).some((item) =>
+      memberIds.has(item.productId) || memberIds.has(item.postedProductId),
+    ),
+  );
+  if (hasInventoryHistory || hasInvoiceReferences) {
+    return { error: 'No se puede eliminar un producto con movimientos o referencias de factura.' };
+  }
+
+  products = products.filter((item) => item.origin !== origin || !memberIds.has(item.id));
+  for (const group of equivalenceGroups.values()) {
+    if (group.origin !== origin) continue;
+    group.candidateProductIds = group.candidateProductIds.filter((id) => !memberIds.has(id));
+    group.confirmedProductIds = new Set([...group.confirmedProductIds].filter((id) => !memberIds.has(id)));
+    if (!group.candidateProductIds.length) {
+      group.confirmedAt = null;
+      group.reviewEvidenceProvided = false;
+    }
+  }
+  normalizationReviews = normalizationReviews.flatMap((review) => {
+    if (review.origin !== origin) return [review];
+    const productIds = review.productIds.filter((id) => !memberIds.has(id));
+    return productIds.length ? [{ ...review, productIds }] : [];
+  });
+  rebuildCanonicalCatalog();
+  persistData();
+  return { deleted: true, count: memberIds.size };
+}
+
 export function getProductDetails({
   productId,
   allowedBranches,
@@ -683,6 +800,19 @@ export function listInvoices(origin = 'practice') {
 export function getInvoice(invoiceId, origin = 'practice') {
   const invoice = invoices.find((item) => item.id === invoiceId && item.origin === origin);
   return invoice ? structuredClone(invoice) : null;
+}
+
+export function deleteInvoice({ invoiceId, origin = 'practice' }) {
+  const invoice = invoices.find((item) => item.id === invoiceId && item.origin === origin);
+  if (!invoice) return { error: 'No se encontró la factura.' };
+  if (invoice.inventoryPostedAt || inventoryMovements.some((movement) =>
+    movement.origin === origin && movement.invoiceId === invoiceId,
+  )) {
+    return { error: 'No se puede eliminar una factura que ya generó movimientos de inventario.' };
+  }
+  invoices = invoices.filter((item) => item.id !== invoiceId || item.origin !== origin);
+  persistData();
+  return { deleted: true };
 }
 
 export function assignInvoiceProduct({ invoiceId, itemIndex, productId, evidence, origin = 'practice' }) {
@@ -960,6 +1090,14 @@ export function getComplaint(complaintId, origin = 'practice') {
       ? (new Date(complaint.firstResponseAt).getTime() - new Date(complaint.receivedAt).getTime()) > 15 * 60 * 1000
       : true,
   };
+}
+
+export function deleteComplaint({ complaintId, origin = 'practice' }) {
+  const exists = complaints.some((item) => item.id === complaintId && item.origin === origin);
+  if (!exists) return { error: 'No se encontró la reclamación.' };
+  complaints = complaints.filter((item) => item.id !== complaintId || item.origin !== origin);
+  persistData();
+  return { deleted: true };
 }
 
 export function createComplaint(payload) {

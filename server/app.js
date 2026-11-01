@@ -9,6 +9,9 @@ import {
   addInvoice,
   assignInvoiceProduct,
   confirmProductEquivalence,
+  deleteComplaint,
+  deleteInvoice,
+  deleteProduct,
   getComplaint,
   getComplaintSlaSummary,
   getInvoice,
@@ -25,6 +28,7 @@ import {
   reviewInvoice,
   createComplaint,
   updateComplaintStatus,
+  updateProduct,
   addComplaintResponse,
 } from './data/store.js';
 import { getSalesReport, salesBranches } from './data/sales.js';
@@ -262,6 +266,14 @@ export function createApp({
     return true;
   }
 
+  function requireEvaluationMode(request, response, next) {
+    if (!evaluationMode) {
+      recordAudit('demo_delete', 'denied', request.identity?.userId ?? null, 'evaluation_mode_disabled');
+      return response.status(403).json({ error: 'Esta operación solo está disponible para datos sintéticos de demostración.' });
+    }
+    next();
+  }
+
   app.disable('x-powered-by');
   if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
   app.use((request, response, next) => {
@@ -300,7 +312,7 @@ export function createApp({
       if (!origin || configuredOrigins().includes(origin)) return callback(null, true);
       return callback(null, false);
     },
-    methods: ['GET', 'POST'],
+    methods: ['GET', 'POST', 'PATCH', 'DELETE'],
     allowedHeaders: ['Authorization', 'Content-Type', 'X-Chat-Session', 'X-Data-Origin'],
     credentials: false,
     maxAge: 600,
@@ -675,6 +687,70 @@ export function createApp({
     response.status(201).json({ item, origin });
   });
 
+  app.patch('/api/products/:productId', requireEvaluationMode, (request, response) => {
+    const origin = getDataOrigin(request, response);
+    if (!origin) return;
+    const productId = Number(request.params.productId);
+    if (!Number.isSafeInteger(productId) || productId < 1) {
+      return response.status(400).json({ error: 'El identificador del producto no es válido.' });
+    }
+
+    const body = request.body ?? {};
+    const allowedFields = ['name', 'category', 'branch'];
+    if (
+      !body
+      || typeof body !== 'object'
+      || Array.isArray(body)
+      || Object.keys(body).some((field) => !allowedFields.includes(field))
+      || !allowedFields.every((field) => typeof body[field] === 'string' && body[field].trim())
+    ) {
+      return response.status(400).json({ error: 'Nombre, categoría y sucursal son obligatorios; no se permiten otros campos.' });
+    }
+    const { name, category, branch } = body;
+    if (!branches.includes(branch.trim())) {
+      return response.status(400).json({ error: 'Selecciona una de las sucursales disponibles.' });
+    }
+    if (name.trim().length > 100 || category.trim().length > 80 || branch.trim().length > 80) {
+      return response.status(400).json({ error: 'Revisa la longitud de los campos.' });
+    }
+    if (request.identity && !branchIsAllowed(request.identity, branch.trim())) {
+      recordAudit('demo_product_update', 'denied', request.identity.userId, 'branch_scope_denied');
+      return response.status(403).json({ error: 'Solo puedes asignar productos a tu sucursal.' });
+    }
+
+    const result = updateProduct({
+      productId,
+      name: name.trim(),
+      category: category.trim(),
+      branch: branch.trim(),
+      origin,
+    });
+    if (result.error) {
+      const status = result.error === 'No se encontró el producto.' ? 404 : 409;
+      recordAudit('demo_product_update', 'denied', request.identity?.userId ?? null, `product:${productId}`);
+      return response.status(status).json({ error: result.error });
+    }
+    recordAudit('demo_product_update', 'success', request.identity?.userId ?? null, `product:${productId}`);
+    response.json({ item: result, origin });
+  });
+
+  app.delete('/api/products/:productId', requireEvaluationMode, (request, response) => {
+    const origin = getDataOrigin(request, response);
+    if (!origin) return;
+    const productId = Number(request.params.productId);
+    if (!Number.isSafeInteger(productId) || productId < 1) {
+      return response.status(400).json({ error: 'El identificador del producto no es válido.' });
+    }
+    const result = deleteProduct({ productId, origin });
+    if (result.error) {
+      const status = result.error === 'No se encontró el producto.' ? 404 : 409;
+      recordAudit('demo_product_delete', 'denied', request.identity?.userId ?? null, `product:${productId}`);
+      return response.status(status).json({ error: result.error });
+    }
+    recordAudit('demo_product_delete', 'success', request.identity?.userId ?? null, `product:${productId};records:${result.count}`);
+    response.json({ ...result, origin });
+  });
+
   app.post('/api/products/equivalences/confirm', evaluationOrRoles('Administrator'), (request, response) => {
     const origin = getDataOrigin(request, response);
     if (!origin) return;
@@ -903,6 +979,23 @@ export function createApp({
     response.status(result.created ? 201 : 200).json({ ...result, origin });
   });
 
+  app.delete('/api/invoices/:invoiceId', requireEvaluationMode, (request, response) => {
+    const origin = getDataOrigin(request, response);
+    if (!origin) return;
+    const invoiceId = Number(request.params.invoiceId);
+    if (!Number.isSafeInteger(invoiceId) || invoiceId < 1) {
+      return response.status(400).json({ error: 'El identificador de factura no es válido.' });
+    }
+    const result = deleteInvoice({ invoiceId, origin });
+    if (result.error) {
+      const status = result.error === 'No se encontró la factura.' ? 404 : 409;
+      recordAudit('demo_invoice_delete', 'denied', request.identity?.userId ?? null, `invoice:${invoiceId}`);
+      return response.status(status).json({ error: result.error });
+    }
+    recordAudit('demo_invoice_delete', 'success', request.identity?.userId ?? null, `invoice:${invoiceId}`);
+    response.json({ ...result, origin });
+  });
+
   app.get('/api/complaints', (request, response) => {
     const origin = getDataOrigin(request, response);
     if (!origin) return;
@@ -948,6 +1041,22 @@ export function createApp({
     const result = createComplaint(payload);
     if (result.error) return response.status(400).json({ error: result.error });
     response.status(201).json({ item: result.item, origin });
+  });
+
+  app.delete('/api/complaints/:complaintId', requireEvaluationMode, (request, response) => {
+    const origin = getDataOrigin(request, response);
+    if (!origin) return;
+    const complaintId = Number(request.params.complaintId);
+    if (!Number.isSafeInteger(complaintId) || complaintId < 1) {
+      return response.status(400).json({ error: 'El identificador de reclamación no es válido.' });
+    }
+    const result = deleteComplaint({ complaintId, origin });
+    if (result.error) {
+      recordAudit('demo_complaint_delete', 'denied', request.identity?.userId ?? null, `complaint:${complaintId}`);
+      return response.status(404).json({ error: result.error });
+    }
+    recordAudit('demo_complaint_delete', 'success', request.identity?.userId ?? null, `complaint:${complaintId}`);
+    response.json({ ...result, origin });
   });
 
   app.get('/api/complaints/:complaintId', (request, response) => {

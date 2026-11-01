@@ -17,9 +17,8 @@ async function start() {
   const evaluationMode = process.env.RIOCLARO_EVALUATION_MODE === 'true';
   if (evaluationMode) {
     const evaluationFile = process.env.RIOCLARO_EVALUATION_DATA_FILE?.trim();
-    const configuredDataFile = process.env.RIOCLARO_DATA_FILE?.trim();
     const defaultDataFile = path.join(currentDirectory, 'server', 'data', 'rioclaro-data.json');
-    const existingDataFile = configuredDataFile || defaultDataFile;
+    const existingDataFile = process.env.RIOCLARO_OPERATIONAL_DATA_FILE?.trim() || defaultDataFile;
     if (!evaluationFile || !path.isAbsolute(evaluationFile)) {
       console.error('El modo de evaluación requiere RIOCLARO_EVALUATION_DATA_FILE con una ruta absoluta dedicada.');
       process.exitCode = 1;
@@ -27,12 +26,12 @@ async function start() {
     }
     const evaluationAuditFile = process.env.RIOCLARO_EVALUATION_AUDIT_FILE?.trim()
       || `${evaluationFile}.audit.json`;
-    const existingAuditFile = process.env.RIOCLARO_AUDIT_FILE?.trim()
+    const existingAuditFile = process.env.RIOCLARO_OPERATIONAL_AUDIT_FILE?.trim()
       || path.join(currentDirectory, 'server', 'data', 'audit-log.json');
     const defaultAuditFile = path.join(currentDirectory, 'server', 'data', 'audit-log.json');
     const evaluationConversationsFile = process.env.RIOCLARO_EVALUATION_CONVERSATIONS_FILE?.trim()
       || `${evaluationFile}.foundry-conversations.json`;
-    const existingConversationsFile = process.env.FOUNDRY_CONVERSATIONS_FILE?.trim()
+    const existingConversationsFile = process.env.RIOCLARO_OPERATIONAL_CONVERSATIONS_FILE?.trim()
       || path.join(currentDirectory, 'server', 'data', 'foundry-conversations.json');
     const defaultConversationsFile = path.join(currentDirectory, 'server', 'data', 'foundry-conversations.json');
     const evaluationFiles = [evaluationFile, evaluationAuditFile, evaluationConversationsFile];
@@ -65,8 +64,11 @@ async function start() {
   }
   try {
     await loadKeyVaultSecrets();
-  } catch {
-    console.error('No fue posible inicializar la configuración segura de Azure Key Vault. Revisa la identidad administrada y su acceso.');
+  } catch (error) {
+    console.error(JSON.stringify({
+      event: 'key_vault_initialization_failed',
+      message: error instanceof Error ? error.message : 'La inicialización de Key Vault falló.',
+    }));
     process.exitCode = 1;
     return;
   }

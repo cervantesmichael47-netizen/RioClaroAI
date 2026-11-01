@@ -26,7 +26,9 @@ let complaintListRequest = 0;
 let complaintDetailRequest = 0;
 let dashboard = null;
 let salesReport = null;
+let dataLoadRequest = 0;
 let requestPending = false;
+let editingProductId = null;
 let chatRecognition = null;
 let chatListening = false;
 let chatRecognitionCancelled = false;
@@ -235,7 +237,18 @@ function renderProducts() {
         `<span class="branch-stock">${escapeHTML(item.name)}: <strong>${item.stock}</strong></span>`,
       ).join('');
     const review = product.reviewRequired ? '<span class="review-pill review-needed">Revisión humana</span>' : '';
-    return `<tr><td><span class="product-name"><span class="product-mini-icon">${icon('package')}</span>${escapeHTML(product.name)}</span>${review}</td><td>${escapeHTML(product.category)}</td><td><span class="branch-tag">${escapeHTML(product.branch)}</span></td><td class="branch-stock-list">${stock}</td><td><span class="status-pill ${state}">${label}</span></td><td><button class="button button-secondary product-detail-button" type="button" data-product-id="${product.id}">Detalle</button></td></tr>`;
+    const editable = evaluationMode
+      && product.sourceIds?.length === 1
+      && product.id === product.sourceIds[0]
+      && product.normalizationStatus === 'normalized'
+      && !product.reviewRequired;
+    const editAction = editable
+      ? `<button class="button button-secondary" type="button" data-edit-product-id="${product.sourceIds[0]}" aria-label="Editar ${escapeHTML(product.name)}">Editar</button>`
+      : '';
+    const deleteAction = evaluationMode
+      ? `<button class="button button-secondary product-delete-button" type="button" data-delete-product-id="${product.id}" aria-label="Eliminar ${escapeHTML(product.name)}">Eliminar</button>`
+      : '';
+    return `<tr><td><span class="product-name"><span class="product-mini-icon">${icon('package')}</span>${escapeHTML(product.name)}</span>${review}</td><td>${escapeHTML(product.category)}</td><td><span class="branch-tag">${escapeHTML(product.branch)}</span></td><td class="branch-stock-list">${stock}</td><td><span class="status-pill ${state}">${label}</span></td><td><div class="product-row-actions"><button class="button button-secondary product-detail-button" type="button" data-product-id="${product.id}">Detalle</button>${editAction}${deleteAction}</div></td></tr>`;
   }).join('') : '<tr><td colspan="6" class="empty-state">No hay productos que coincidan con esta búsqueda.</td></tr>';
   renderSuggestions(visible);
   refreshIcons();
@@ -285,9 +298,14 @@ function renderInvoices() {
       : 'Sin verificar';
     const supplier = invoice.supplier || 'Sin verificar';
     const canReview = evaluationMode && !['confirmed', 'rejected'].includes(invoice.status);
-    const actions = canReview
-      ? `<button class="button button-secondary invoice-review-button" type="button" data-invoice-review="${invoice.id}">Revisar decisión</button>`
-      : 'Requiere revisión humana autorizada';
+    const actions = [
+      canReview
+        ? `<button class="button button-secondary invoice-review-button" type="button" data-invoice-review="${invoice.id}">Revisar decisión</button>`
+        : evaluationMode ? 'Revisión finalizada' : 'Requiere revisión humana autorizada',
+      evaluationMode && !invoice.inventoryPostedAt
+        ? `<button class="button button-secondary" type="button" data-delete-invoice-id="${invoice.id}" aria-label="Eliminar factura ${escapeHTML(invoice.reference || invoice.id)}">Eliminar</button>`
+        : '',
+    ].filter(Boolean).join(' ');
     return `<tr><td><span class="invoice-supplier">${escapeHTML(supplier)}</span><span class="invoice-ref">${escapeHTML(invoice.reference || 'Folio sin verificar')}</span></td><td>${escapeHTML(invoice.date || 'Sin verificar')}</td><td>${escapeHTML(amount)}</td><td><span class="review-pill ${invoice.possibleDuplicate || missingFields.length ? 'review-needed' : ''}">${escapeHTML(invoice.status || reviewLabel)}</span></td><td>${actions}</td></tr>`;
   }).join('')
     : '<tr><td colspan="5" class="empty-state">No hay registros de facturas.</td></tr>';
@@ -335,8 +353,13 @@ async function submitInvoiceReview(event) {
       }),
     });
     dialog.close();
-    await loadData();
-    showToast(`Revisión registrada: ${result.item.status}. No se ejecutó ningún pago.`);
+    const refreshed = await loadData();
+    showToast(
+      refreshed
+        ? `Revisión registrada: ${result.item.status}. No se ejecutó ningún pago.`
+        : 'La revisión se registró, pero no se pudo actualizar la vista. Recarga los datos.',
+      refreshed ? '' : 'error',
+    );
   } catch (error) {
     setFeedback($('#invoice-review-feedback'), error.message, true);
   } finally {
@@ -529,13 +552,16 @@ function renderComplaintDetail(complaint) {
   const draftButton = !complaint.firstResponseAt
     ? `<button class="button button-secondary" type="button" data-draft-response${chatEnabled ? '' : ' disabled'}>Sugerir borrador con IA</button><span class="field-help">El agente recibe solo la categoría y el estado; no se envía al cliente.</span>`
     : '';
+  const deleteAction = evaluationMode
+    ? '<section class="complaint-detail-section"><button class="button button-secondary" type="button" data-delete-complaint>Eliminar reclamación sintética</button></section>'
+    : '';
   content.innerHTML = `
     <div class="complaint-detail-summary"><span class="status-pill ${complaint.status === 'resolved' || complaint.status === 'closed' ? 'status-ok' : complaint.status === 'in_progress' ? 'status-low' : 'status-empty'}">${escapeHTML(complaintStates[complaint.status] ?? complaint.status)}</span><span>${escapeHTML(complaint.branch)}</span></div>
     <dl class="complaint-detail-fields"><div><dt>Recibida</dt><dd>${escapeHTML(formatDateTime(complaint.receivedAt))}</dd></div><div><dt>Cliente</dt><dd>${escapeHTML(complaint.customerName)}</dd></div><div><dt>Categoría</dt><dd>${escapeHTML(complaint.category)}</dd></div><div><dt>Responsable</dt><dd>${escapeHTML(complaint.assignedTo || 'Sin asignar')}</dd></div></dl>
     <p class="complaint-detail-description">${escapeHTML(complaint.description)}</p>${contact}${responseInfo}
     <section class="complaint-detail-section"><h3>Actualizar estado</h3><form class="complaint-action-form" data-action="status"><label>Nuevo estado<select name="status">${Object.entries(complaintStates).map(([value, label]) => `<option value="${value}"${complaint.status === value ? ' selected' : ''}>${label}</option>`).join('')}</select></label><label>Nota del cambio (opcional)<textarea name="note" rows="2" maxlength="500" placeholder="Contexto del cambio"></textarea></label><button class="button button-secondary" type="submit">Guardar estado</button><div class="form-feedback" data-action-feedback role="status" aria-live="polite"></div></form></section>
     ${complaint.firstResponseAt ? '' : `<section class="complaint-detail-section"><h3>Revisar respuesta antes de registrar</h3><form class="complaint-action-form" data-action="response"><label>Borrador revisado<textarea name="message" rows="3" maxlength="2000" required placeholder="Escribe o corrige el borrador antes de registrarlo"></textarea></label>${draftButton}<label class="complaint-consent"><input type="checkbox" name="humanApproved" required> Confirmo que revisé y aprobé este texto. No se enviará automáticamente.</label><button class="button button-primary" type="submit">Registrar respuesta revisada</button><div class="form-feedback" data-action-feedback role="status" aria-live="polite"></div></form></section>`}
-    <section class="complaint-detail-section"><h3>Historial completo</h3><ol class="complaint-history">${historyRows}</ol></section>`;
+    <section class="complaint-detail-section"><h3>Historial completo</h3><ol class="complaint-history">${historyRows}</ol></section>${deleteAction}`;
 }
 
 async function showComplaintDetails(complaintId) {
@@ -669,6 +695,27 @@ function setFeedback(element, message, isError = false) {
   element.classList.toggle('has-error', isError);
 }
 
+async function deleteDemoRecord(url, confirmation, successMessage, onDeleted) {
+  if (!evaluationMode || requestPending || !window.confirm(confirmation)) return false;
+  requestPending = true;
+  try {
+    await api(url, { method: 'DELETE' });
+    const refreshed = await onDeleted();
+    showToast(
+      refreshed === false
+        ? `${successMessage} No se pudo actualizar la vista; vuelve a cargar los datos.`
+        : successMessage,
+      refreshed === false ? 'error' : '',
+    );
+    return true;
+  } catch (error) {
+    showToast(error.message, 'error');
+    return false;
+  } finally {
+    requestPending = false;
+  }
+}
+
 function setChatVoiceStatus(message, state = '') {
   const status = $('#chat-voice-status');
   status.textContent = message;
@@ -785,10 +832,12 @@ function setLoading(form, loading) {
 }
 
 async function loadData() {
+  const requestId = ++dataLoadRequest;
   try {
     const [dashboardData, productData, invoiceData] = await Promise.all([
       api('/api/dashboard'), api('/api/products'), api('/api/invoices'),
     ]);
+    if (requestId !== dataLoadRequest) return true;
     dashboard = dashboardData;
     products = productData.items;
     searchedProducts = null;
@@ -797,7 +846,9 @@ async function loadData() {
     renderDashboard();
     renderProducts();
     renderInvoices();
+    return true;
   } catch (error) {
+    if (requestId !== dataLoadRequest) return true;
     dashboard = null;
     products = [];
     searchedProducts = null;
@@ -811,6 +862,7 @@ async function loadData() {
     renderProducts();
     renderInvoices();
     showToast(error.message, 'error');
+    return false;
   }
 }
 
@@ -859,8 +911,11 @@ async function loadSecurityStatus() {
   }
   try {
     const status = await api('/api/security/status');
+    const previousEvaluationMode = evaluationMode;
     evaluationMode = Boolean(status.evaluationMode);
+    let refreshData = evaluationMode !== previousEvaluationMode;
     if (evaluationMode) {
+      refreshData ||= dataOrigin !== 'practice';
       dataOrigin = 'practice';
       sessionStorage.setItem('rioclaro-data-origin', dataOrigin);
       $('#data-origin').value = dataOrigin;
@@ -876,6 +931,14 @@ async function loadSecurityStatus() {
       : practiceWritesEnabled
         ? 'Las altas de productos y facturas se guardan solo en Práctica local. Operación requiere Entra; las facturas quedan pendientes de revisión y no se realizan pagos.'
       : 'Las escrituras requieren un token de Entra verificado por la API. La interfaz web aún no implementa inicio de sesión.';
+    if (refreshData) {
+      await loadData();
+      void loadSalesReport();
+      complaintListRequest += 1;
+      complaints = [];
+      renderComplaints();
+      if ($('#complaint-branch-filter').value) void loadComplaints();
+    }
     updateWriteControls();
     const connection = status.foundryConnection;
     const connected = Boolean(connection?.connected && status.aiEnabled && !status.aiSuspended);
@@ -1143,6 +1206,22 @@ function initialize() {
     }
   });
   $('#complaint-detail-content').addEventListener('click', async (event) => {
+    const deleteButton = event.target.closest('[data-delete-complaint]');
+    if (deleteButton) {
+      const complaintId = Number($('#complaint-detail-dialog').dataset.complaintId);
+      if (!Number.isSafeInteger(complaintId) || complaintId < 1) return;
+      const deleted = await deleteDemoRecord(
+        `/api/complaints/${complaintId}`,
+        'La reclamación sintética y su historial se eliminarán permanentemente. ¿Deseas continuar?',
+        'Reclamación sintética eliminada.',
+        async () => {
+          $('#complaint-detail-dialog').close();
+          await loadComplaints();
+          return loadData();
+        },
+      );
+      if (deleted) return;
+    }
     const button = event.target.closest('[data-draft-response]');
     if (!button) return;
     if (!chatEnabled || requestPending) {
@@ -1172,6 +1251,46 @@ function initialize() {
   });
   window.setInterval(updateComplaintClocks, 30000);
   $('#product-rows').addEventListener('click', (event) => {
+    const editButton = event.target.closest('[data-edit-product-id]');
+    if (editButton) {
+      const productId = Number(editButton.dataset.editProductId);
+      const product = products.find((item) =>
+        item.id === productId
+        && item.sourceIds?.length === 1
+        && item.normalizationStatus === 'normalized'
+        && !item.reviewRequired,
+      );
+      if (!product || !evaluationMode) return;
+      editingProductId = productId;
+      productForm.reset();
+      clearErrors(productForm);
+      setFeedback($('#product-feedback'), '');
+      productForm.elements.namedItem('name').value = product.name;
+      productForm.elements.namedItem('category').value = product.category;
+      productForm.elements.namedItem('branch').value = product.branches[0].name;
+      $('#product-form-eyebrow').textContent = 'ACTUALIZACIÓN DEMO';
+      $('#product-dialog-title').textContent = 'Editar producto';
+      $('#product-form-note').textContent = 'Solo se editarán el nombre, la categoría y la sucursal. Las existencias y los movimientos se conservan.';
+      $('button[type="submit"]', productForm).innerHTML = `${icon('save')} <span>Guardar cambios</span>`;
+      $('#product-stock-field').hidden = true;
+      refreshIcons();
+      $('#product-dialog').showModal();
+      return;
+    }
+    const deleteButton = event.target.closest('[data-delete-product-id]');
+    if (deleteButton) {
+      const productId = Number(deleteButton.dataset.deleteProductId);
+      const product = products.find((item) => item.id === productId);
+      if (!product) return;
+      const records = product.sourceIds?.length ?? 1;
+      void deleteDemoRecord(
+        `/api/products/${productId}`,
+        `Se eliminará permanentemente ${product.name}${records > 1 ? ` y sus ${records} registros agrupados por sucursal` : ''}. Los productos con movimientos o facturas relacionados no pueden eliminarse. ¿Deseas continuar?`,
+        'Producto sintético eliminado.',
+        loadData,
+      );
+      return;
+    }
     const button = event.target.closest('[data-product-id]');
     if (button) void showProductDetails(Number(button.dataset.productId));
   });
@@ -1191,9 +1310,16 @@ function initialize() {
   const dialog = $('#product-dialog');
   const productForm = $('#product-form');
   $('#open-product-form').addEventListener('click', () => {
+    editingProductId = null;
     productForm.reset();
     clearErrors(productForm);
     setFeedback($('#product-feedback'), '');
+    $('#product-form-eyebrow').textContent = 'NUEVO REGISTRO';
+    $('#product-dialog-title').textContent = 'Agregar producto';
+    $('#product-form-note').textContent = 'Se guarda únicamente en el conjunto de Práctica local.';
+    $('button[type="submit"]', productForm).innerHTML = `${icon('plus')} <span>Agregar producto</span>`;
+    $('#product-stock-field').hidden = false;
+    refreshIcons();
     dialog.showModal();
   });
   $('#close-product-form').addEventListener('click', () => dialog.close());
@@ -1203,24 +1329,39 @@ function initialize() {
   });
   productForm.addEventListener('submit', async (event) => {
     event.preventDefault();
-    if (requestPending || !validateForm(productForm, [
+    const validators = [
       ['name', (value) => value.trim() ? '' : 'Ingresa un nombre.'],
       ['category', (value) => value.trim() ? '' : 'Ingresa una categoría.'],
       ['branch', (value) => branches.includes(value) ? '' : 'Selecciona una sucursal válida.'],
-      ['stock', (value) => value.trim() && Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 1_000_000 ? '' : 'Ingresa un entero entre 0 y 1,000,000.'],
-    ])) return;
+    ];
+    if (editingProductId === null) {
+      validators.push(['stock', (value) => value.trim() && Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 1_000_000 ? '' : 'Ingresa un entero entre 0 y 1,000,000.']);
+    }
+    if (requestPending || !validateForm(productForm, validators)) return;
     requestPending = true;
     setLoading(productForm, true);
     try {
-      await api('/api/products', { method: 'POST', body: JSON.stringify({
+      const payload = {
         name: productForm.elements.namedItem('name').value.trim(),
         category: productForm.elements.namedItem('category').value.trim(),
         branch: productForm.elements.namedItem('branch').value,
-        stock: Number(productForm.elements.namedItem('stock').value),
-      }) });
-      await loadData();
+      };
+      if (editingProductId === null) payload.stock = Number(productForm.elements.namedItem('stock').value);
+      const wasEditing = editingProductId !== null;
+      await api(wasEditing ? `/api/products/${editingProductId}` : '/api/products', {
+        method: wasEditing ? 'PATCH' : 'POST',
+        body: JSON.stringify(payload),
+      });
+      const refreshed = await loadData();
       dialog.close();
-      showToast('Producto agregado.');
+      const successMessage = wasEditing ? 'Producto actualizado.' : 'Producto agregado.';
+      showToast(
+        refreshed
+          ? successMessage
+          : `El producto se ${wasEditing ? 'actualizó' : 'agregó'}, pero no se pudo actualizar la vista. Recarga los datos.`,
+        refreshed ? '' : 'error',
+      );
+      editingProductId = null;
     } catch (error) {
       setFeedback($('#product-feedback'), error.message, true);
     } finally {
@@ -1242,6 +1383,17 @@ function initialize() {
     }
   });
   $('#invoice-rows').addEventListener('click', (event) => {
+    const deleteButton = event.target.closest('[data-delete-invoice-id]');
+    if (deleteButton) {
+      const invoiceId = Number(deleteButton.dataset.deleteInvoiceId);
+      void deleteDemoRecord(
+        `/api/invoices/${invoiceId}`,
+        'La factura sintética se eliminará permanentemente. ¿Deseas continuar?',
+        'Factura sintética eliminada.',
+        loadData,
+      );
+      return;
+    }
     const button = event.target.closest('[data-invoice-review]');
     if (button) openInvoiceReview(Number(button.dataset.invoiceReview));
   });
@@ -1303,15 +1455,17 @@ function initialize() {
         currency: invoiceForm.elements.namedItem('currency').value,
         items,
       }) });
-      await loadData();
+      const refreshed = await loadData();
       invoiceForm.reset();
       $('#invoice-lines').replaceChildren();
       addInvoiceLine(false);
       $('#invoice-document').value = '';
       updateInvoiceTotal();
-      setFeedback($('#invoice-feedback'), result.possibleDuplicate
-        ? 'Posible coincidencia detectada. Requiere revisión de una persona; no se autorizó ningún pago.'
-        : 'Registro agregado. La factura queda pendiente de revisión; no se realizó ningún pago.');
+      setFeedback($('#invoice-feedback'), !refreshed
+        ? 'La factura se registró, pero no se pudo actualizar la vista. Recarga los datos para verificarla.'
+        : result.possibleDuplicate
+          ? 'Posible coincidencia detectada. Requiere revisión de una persona; no se autorizó ningún pago.'
+          : 'Registro agregado. La factura queda pendiente de revisión; no se realizó ningún pago.', !refreshed);
     } catch (error) {
       setFeedback($('#invoice-feedback'), error.message, true);
     } finally {

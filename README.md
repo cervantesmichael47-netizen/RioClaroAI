@@ -1,141 +1,187 @@
-# 🌿 RÍO CLARO AI
-### INTELIGENCIA ARTIFICIAL · GESTIÓN EMPRESARIAL · INNOVACIÓN
+# RÍO CLARO AI
 
-<p align="center">
-  <strong>De datos dispersos a decisiones inteligentes.</strong>
-  <br>
-  Una nueva forma de gestionar, consultar y analizar la información empresarial mediante inteligencia artificial.
-</p>
+**Plataforma de inteligencia operativa para la gestión de inventario, revisión de facturas, reclamaciones y asistencia empresarial mediante Microsoft Foundry.**
 
-<p align="center">
-  <img src="https://img.shields.io/badge/AI-Microsoft%20Foundry-246B45?style=for-the-badge">
-  <img src="https://img.shields.io/badge/Backend-Node.js-39875A?style=for-the-badge">
-  <img src="https://img.shields.io/badge/Interface-Web%20Application-E6B93D?style=for-the-badge">
-</p>
+Demostración pública de una arquitectura basada en Node.js, Microsoft Azure e inteligencia artificial, diseñada para facilitar la gestión y el análisis de información empresarial.
 
 ---
 
-## ✦ EL PROYECTO
+## Galería del proyecto
 
-**RÍO CLARO AI** es una plataforma web de inteligencia operativa desarrollada para Distribuidora Río Claro, que integra inteligencia artificial para facilitar la consulta, organización y análisis de información empresarial.
+Explora la interfaz y los principales módulos de RÍO CLARO AI.
 
-Mediante un asistente inteligente y herramientas de gestión, la plataforma permite interactuar con información de inventarios, ventas, facturas, proveedores, clientes y sucursales.
+### Página principal
 
-Su propósito es convertir información dispersa en conocimiento útil, agilizando procesos y apoyando la toma de decisiones.
+| Inicio | Sección inferior |
+|:---:|:---:|
+| ![Río Claro AI](public/images/rioclaro_inicio.png) | ![Río Claro AI - Sección inferior](public/images/rioclaro_inicio_abajo.png) |
 
-## ◈ EL RETO: UNA EMPRESA, MÚLTIPLES DESAFÍOS
+### Gestión empresarial
 
-La gestión de Distribuidora Río Claro enfrenta distintos retos operativos:
+| Inventario | Registro de productos |
+|:---:|:---:|
+| ![Inventario](public/images/inventario.png) | ![Agregar producto](public/images/agregar_producto.png) |
 
-| Problemática | Impacto |
-|:--|:--|
-| Información dispersa | Dificultad para consultar y relacionar datos. |
-| Captura manual de facturas | Tiempo elevado en tareas administrativas. |
-| Posibles facturas duplicadas | Riesgo de errores en los procesos de pago. |
-| Quejas sin seguimiento centralizado | Atención y resolución más complicadas. |
-| Inventarios con nombres inconsistentes | Consultas y búsquedas menos eficientes. |
-| Información entre sucursales | Dificultad para obtener una visión general. |
+| Reclamaciones | Facturas |
+|:---:|:---:|
+| ![Reclamaciones](public/images/reclamaciones.png) | ![Facturas](public/images/facturas.png) |
 
-**La propuesta:** utilizar inteligencia artificial para hacer que la información sea más accesible, comprensible y útil para las personas.
+| Documentación | Acerca de RÍO CLARO AI |
+|:---:|:---:|
+| ![Documentación](public/images/documentacion.png) | ![Acerca de Río Claro](public/images/acerca_rioclaro.png) |
 
----
+### Inteligencia artificial
 
-## ✦ CONOCE LA PLATAFORMA
-
-### 01 · DASHBOARD PRINCIPAL
-
-Vista general de la plataforma y sus herramientas de gestión.
-
-<p align="center">
-  <em>Captura de pantalla pendiente de agregar.</em>
-</p>
-
-<!-- ESPACIO PARA LA CAPTURA: docs/images/panel-principal.png -->
+| Asistente de IA | IA responsable |
+|:---:|:---:|
+| ![Asistente de IA](public/images/asistente_ia.png) | ![IA responsable](public/images/ia_responsable.png) |
 
 ---
 
-### 02 · ASISTENTE INTELIGENTE
+## Alcance y arquitectura
 
-Interacción mediante lenguaje natural para consultar información empresarial.
+- **Frontend:** aplicación web estática en `public/`, con diseño adaptable a escritorio y móvil.
+- **API:** Node.js 24 y Express en `server.js` y `server/app.js`.
+- **Datos:** archivos JSON con persistencia atómica. El modo de demostración utiliza archivos propios, separados de los datos operativos.
+- **Identidad:** Microsoft Entra ID verifica las solicitudes operativas. Las solicitudes públicas de demostración no requieren cuenta y quedan fijadas en el origen sintético.
+- **Asistente:** el backend usa `@azure/ai-projects` y `DefaultAzureCredential` para invocar el agente existente mediante la identidad administrada. No hay respuestas simuladas en producción.
+- **Servicios opcionales:** Key Vault para cargar secretos del backend y Azure AI Document Intelligence para extraer campos de facturas. Document Intelligence no es necesario para la demostración pública.
 
-<p align="center">
-  <em>Captura de pantalla pendiente de agregar.</em>
-</p>
+La aplicación incluye un conjunto controlado de productos y facturas de ejemplo, y reportes de ventas generados y etiquetados como sintéticos. No son datos de la empresa. Las escrituras públicas de demostración no consultan ni modifican registros operativos.
 
-<!-- ESPACIO PARA LA CAPTURA: docs/images/asistente-ia.png -->
+## Requisitos
 
----
+- Node.js 24 (Node.js 22 o superior es compatible con los SDK instalados).
+- npm incluido con Node.js.
+- Para comprobar Foundry localmente: acceso de red al proyecto y una credencial Azure de desarrollo con los permisos necesarios. Los visitantes no necesitan una cuenta Microsoft.
 
-### 03 · CONTROL DE INVENTARIOS
+## Instalación y ejecución local
 
-Consulta y organización de productos por sucursal.
+```powershell
+npm ci
+```
 
-<p align="center">
-  <em>Captura de pantalla pendiente de agregar.</em>
-</p>
+Para no utilizar ningún archivo de datos local preexistente, configura el modo sintético con archivos aislados en una carpeta temporal:
 
-<!-- ESPACIO PARA LA CAPTURA: docs/images/inventario.png -->
+```powershell
+$demoDir = Join-Path $env:TEMP 'rioclaro-public-demo'
+New-Item -ItemType Directory -Force $demoDir | Out-Null
+$env:NODE_ENV = 'development'
+$env:RIOCLARO_EVALUATION_MODE = 'true'
+$env:RIOCLARO_DATA_FILE = Join-Path $demoDir 'data.json'
+$env:RIOCLARO_EVALUATION_DATA_FILE = $env:RIOCLARO_DATA_FILE
+$env:RIOCLARO_AUDIT_FILE = Join-Path $demoDir 'audit.json'
+$env:RIOCLARO_EVALUATION_AUDIT_FILE = $env:RIOCLARO_AUDIT_FILE
+$env:FOUNDRY_CONVERSATIONS_FILE = Join-Path $demoDir 'conversations.json'
+$env:RIOCLARO_EVALUATION_CONVERSATIONS_FILE = $env:FOUNDRY_CONVERSATIONS_FILE
+$env:FOUNDRY_ENABLED = 'false'
+npm start
+```
 
----
+Abre `http://localhost:3000`. Si `PORT` está definido, el servidor escucha en ese puerto. Foundry queda desactivado en el ejemplo local; el chat indica que no está disponible hasta que el servicio esté configurado y verificado.
 
-### 04 · GESTIÓN DE FACTURAS
+Para habilitar Foundry localmente, establece las variables de Foundry de la tabla siguiente y autentícate con un proveedor admitido por `DefaultAzureCredential` (por ejemplo, `az login`). No pegues tokens ni secretos en el repositorio, en el navegador o en mensajes.
 
-Extracción de información y detección de posibles duplicados.
+## Variables de entorno
 
-<p align="center">
-  <em>Captura de pantalla pendiente de agregar.</em>
-</p>
+Los valores de ejemplo están en [.env.example](./.env.example). Nunca guardes valores secretos en ese archivo.
 
-<!-- ESPACIO PARA LA CAPTURA: docs/images/facturas.png -->
+### Azure App Service: requeridas para la demostración pública
 
----
+| Variable | Valor |
+|---|---|
+| `NODE_ENV` | `production` |
+| `RIOCLARO_EVALUATION_MODE` | `true` |
+| `RIOCLARO_DATA_FILE` y `RIOCLARO_EVALUATION_DATA_FILE` | Ambas `/home/data/rioclaro-public-demo/data.json` |
+| `RIOCLARO_AUDIT_FILE` y `RIOCLARO_EVALUATION_AUDIT_FILE` | Ambas `/home/data/rioclaro-public-demo/audit.json` |
+| `FOUNDRY_CONVERSATIONS_FILE` y `RIOCLARO_EVALUATION_CONVERSATIONS_FILE` | Ambas `/home/data/rioclaro-public-demo/conversations.json` |
 
-### 05 · ATENCIÓN Y SEGUIMIENTO
+Las tres rutas deben ser absolutas, distintas entre sí y estar en almacenamiento persistente. El servidor rechazará rutas que coincidan con los archivos operativos predeterminados o entre sí. No reutilices un archivo operativo para la demostración.
 
-Administración de quejas y reclamaciones de las sucursales.
+`PORT` lo proporciona App Service; no fijes un puerto de producción. En **Configuración > Pila de configuración**, selecciona Node 24 y usa `npm start`.
 
-<p align="center">
-  <em>Captura de pantalla pendiente de agregar.</em>
-</p>
+### Microsoft Foundry: requeridas para habilitar el asistente
 
-<!-- ESPACIO PARA LA CAPTURA: docs/images/reclamaciones.png -->
+| Variable | Valor |
+|---|---|
+| `FOUNDRY_PROJECT_ENDPOINT` | `https://rioclaroia-resource.services.ai.azure.com/api/projects/rioclaroia` |
+| `FOUNDRY_AGENT_NAME` | `RioClaroAssistant` |
+| `FOUNDRY_ENABLED` | `true` |
+| `FOUNDRY_SUSPENDED` | `false` |
 
----
+Activa la **identidad administrada** del App Service. Para el recurso/proyecto Foundry indicado, concede a esa identidad el rol mínimo que permita consultar el agente y ejecutar respuestas. La comprobación de conexión usa `project.agents.get`; si el rol de consumidor no autoriza esa lectura en la configuración del proyecto, revisa el rol **Foundry User** con el menor ámbito posible. Confirma los permisos efectivos en Azure; el código no puede concederlos. La identidad se usa exclusivamente desde el backend.
 
-### 06 · ANÁLISIS DE VENTAS
+No se necesita una clave de Foundry ni autenticación Microsoft para los visitantes. `AZURE_CLIENT_ID` solo se configura si se selecciona una identidad administrada asignada por el usuario; para una identidad asignada por el sistema, déjala vacía. `FOUNDRY_TIMEOUT_MS` es opcional; su valor predeterminado es `20000` y el rango permitido es de 1000 a 120000 ms.
 
-Información comercial para apoyar decisiones empresariales.
+### Variables opcionales o solo para otros escenarios
 
-<p align="center">
-  <em>Captura de pantalla pendiente de agregar.</em>
-</p>
+| Variable | Cuándo se usa |
+|---|---|
+| `KEY_VAULT_URL` y `KEY_VAULT_SECRET_NAMES` | Solo si el backend debe leer secretos `FOUNDRY_*` desde Key Vault. Configura ambos y asigna a la identidad el rol **Key Vault Secrets User**. No son necesarios para autenticarse a Foundry mediante identidad administrada. |
+| `DOCUMENT_INTELLIGENCE_ENDPOINT` | Solo si se habilita extracción de facturas en un entorno autorizado. No es requisito para la demostración pública, donde se bloquea el análisis de documentos externos. |
+| `CORS_ALLOWED_ORIGINS` | Solo para clientes web en otros orígenes. Para la aplicación servida desde el mismo App Service, déjala vacía. |
+| `ENTRA_TENANT_ID`, `ENTRA_API_CLIENT_ID`, `ENTRA_BRANCH_CLAIM` | Solo para la API operativa protegida con Entra. No se necesitan para el modo público de demostración. |
+| `RIOCLARO_OPERATIONAL_DATA_FILE`, `RIOCLARO_OPERATIONAL_AUDIT_FILE`, `RIOCLARO_OPERATIONAL_CONVERSATIONS_FILE` | Solo para declarar rutas operativas explícitas que el arranque debe proteger frente a una configuración de demostración coincidente. No apuntes la demostración a esos archivos. |
+| `ALLOW_UNAUTHENTICATED_LOCAL_CHAT` | Exclusivamente para pruebas locales; nunca lo actives en producción. |
+| `AZURE_KEY_VAULT_ACCESS_TOKEN` | Credencial de desarrollo local heredada para Key Vault; no la configures en Azure ni la publiques. En Azure se usa identidad administrada. |
 
-<!-- ESPACIO PARA LA CAPTURA: docs/images/reportes-ventas.png -->
+Key Vault no es obligatorio si los valores no secretos de Foundry se configuran como ajustes del App Service. No configures un almacén ni publiques credenciales solo para habilitar Foundry.
 
----
+## Seguridad, persistencia y límites
 
-## ✦ TECNOLOGÍA
+- El modo público solo atiende el origen `practice`, incluso si el visitante envía una cabecera que solicita datos operativos.
+- El modo de demostración debe ejecutarse en una instancia aislada; la aplicación rechaza rutas de persistencia que se solapen con las rutas operativas predeterminadas.
+- Las ediciones públicas solo modifican nombre, categoría y sucursal. No cambian existencias. Cambiar la sucursal se bloquea si existen movimientos o referencias de factura; productos agrupados o pendientes de revisión no se editan automáticamente.
+- Las eliminaciones requieren confirmación en la interfaz y se bloquean si afectan movimientos o referencias protegidas. Las altas, ediciones, eliminaciones y denegaciones relevantes se auditan.
+- Se mantienen validación del servidor, límites de tamaño y tasa, cabeceras de seguridad, aislamiento de roles y controles de datos sensibles.
+- Los datos JSON bajo `/home` sobreviven reinicios de App Service cuando el almacenamiento persistente está habilitado. Con la persistencia local actual, mantén una sola instancia de escritura; no escales horizontalmente sin migrar a un almacén con coordinación de concurrencia.
+- No se modifican ni limpian desde este repositorio archivos de datos persistentes o recursos de Azure.
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Node.js-246B45?style=flat-square&logo=nodedotjs&logoColor=white">
-  <img src="https://img.shields.io/badge/Express-333333?style=flat-square&logo=express&logoColor=white">
-  <img src="https://img.shields.io/badge/Microsoft%20Azure-0078D4?style=flat-square&logo=microsoftazure&logoColor=white">
-  <img src="https://img.shields.io/badge/Microsoft%20Foundry-6B55D9?style=flat-square&logo=microsoftazure&logoColor=white">
-  <img src="https://img.shields.io/badge/JavaScript-F0DB4F?style=flat-square&logo=javascript&logoColor=222222">
-  <img src="https://img.shields.io/badge/HTML5-E34F26?style=flat-square&logo=html5&logoColor=white">
-  <img src="https://img.shields.io/badge/CSS3-1572B6?style=flat-square&logo=css&logoColor=white">
-</p>
+## Pruebas y verificación
 
----
+```powershell
+npm test
+node --check server.js
+node --check server\app.js
+node --check server\data\store.js
+node --check server\services\foundry.js
+node --check public\app.js
+git diff --check
+```
 
-<p align="center">
-  <strong>RÍO CLARO AI</strong>
-  <br>
-  <em>La inteligencia artificial al servicio de las decisiones humanas.</em>
-  <br><br>
-  Desarrollado por
-  <br>
-  <strong>Rebollar Cervantes Michael Gabriel</strong>
-  <br><br>
-  🌿 Innovación · Inteligencia · Transformación Digital
-</p>
+El test de integración de Foundry está separado de la suite local. Requiere credenciales, permisos y `FOUNDRY_INTEGRATION_TEST=true`; no se considera aprobado si se omite.
+
+Para ejecutarlo localmente, configura el endpoint, agente, `FOUNDRY_ENABLED=true` y la credencial Azure de desarrollo, y luego ejecuta:
+
+```powershell
+$env:FOUNDRY_INTEGRATION_TEST = 'true'
+npm run test:foundry
+```
+
+La integración envía consultas al agente real; no la ejecutes contra un recurso que no tengas autorización para usar.
+
+Después de configurar Azure, verifica:
+
+1. `GET /health`: `status` debe ser `ok`, `evaluationMode` debe ser `true` y la disponibilidad de Foundry debe corresponder al último chequeo real.
+2. `GET /api/security/status`: confirma el modo de evaluación, sin necesidad de credenciales de visitante.
+3. `GET /api/products`: debe devolver `200` y `origin: "practice"` sin token.
+4. `POST /api/foundry/check`: debe devolver `connected: true` solo si el backend pudo consultar el agente con su identidad administrada.
+5. Envía una consulta desde el chat y comprueba que la respuesta del agente llega a la interfaz. Si el chequeo falla, consulta los registros del App Service y revisa endpoint, nombre del agente, identidad y RBAC.
+
+La ruta de comprobación es `POST`, está limitada por tasa y no devuelve secretos. Un chequeo HTTP exitoso por sí solo no implica conexión: comprueba también `connected`.
+
+## Publicación en el App Service existente
+
+El workflow [.github/workflows/deploy-azure.yml](./.github/workflows/deploy-azure.yml) solo tiene `workflow_dispatch`; no se ejecuta en cada push. Despliega únicamente a `rioclaro-ai-mgrc`, después de instalar dependencias, ejecutar `npm test` y preparar el paquete de producción.
+
+Antes de ejecutarlo:
+
+1. Configura el runtime Linux Node 24, `npm start`, almacenamiento y variables de App Service descritas arriba.
+2. Habilita la identidad administrada existente y verifica los permisos de Foundry. No crees otro App Service ni recursos adicionales para este despliegue.
+3. Añade el secreto de repositorio `AZURE_WEBAPP_PUBLISH_PROFILE` en GitHub. No pegues ni envíes el perfil de publicación; trátalo como credencial de despliegue.
+4. Ejecuta las pruebas localmente y revisa todos los cambios.
+5. Tras autorizar la publicación, publica los cambios al branch configurado y ejecuta **Actions > Deploy existing Azure App Service > Run workflow**. No ejecutes el workflow hasta contar con autorización explícita.
+
+El workflow no configura ni reemplaza los ajustes del App Service. Después de un despliegue autorizado, repite las verificaciones anteriores. El endpoint público observado antes de publicar los cambios no sirve como prueba de que esta versión ya esté desplegada o que Foundry esté conectado.
+
+Como comprobación posterior, el workflow espera a que la aplicación responda, exige el modo público de evaluación, consulta productos sin autenticación y comprueba la conexión real de Foundry. No envía una conversación de prueba ni crea datos de chat persistentes. Para verificar también una respuesta real, después del workflow envía una consulta sintética desde el asistente de la interfaz.

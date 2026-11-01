@@ -250,3 +250,190 @@ test('Foundry receives only practice inventory in evaluation mode', async () => 
     }
   }
 });
+
+test('public demo permanently deletes only synthetic records and protects inventory history', async () => {
+  const app = await createApp({ evaluationMode: true });
+  const originHeader = { 'X-Data-Origin': 'operational' };
+
+  const product = await request(app).post('/api/products').set(originHeader).send({
+    name: 'Producto sintético para eliminar',
+    category: 'Prueba',
+    branch: 'Guadalajara',
+    stock: 5,
+  }).expect(201);
+  const productId = product.body.item.id;
+  assert.equal(product.body.origin, 'practice');
+  const updatedProduct = await request(app).patch(`/api/products/${productId}`)
+    .set(originHeader)
+    .send({
+      name: 'Producto sintético actualizado',
+      category: 'Prueba actualizada',
+      branch: 'León',
+    }).expect(200);
+  assert.equal(updatedProduct.body.origin, 'practice');
+  assert.equal(updatedProduct.body.item.name, 'Producto sintético actualizado');
+  assert.equal(updatedProduct.body.item.category, 'Prueba actualizada');
+  assert.equal(updatedProduct.body.item.branch, 'León');
+  assert.equal(updatedProduct.body.item.stock, 5);
+  const rejectedStockEdit = await request(app).patch(`/api/products/${productId}`)
+    .set(originHeader)
+    .send({
+      name: 'Producto sintético actualizado',
+      category: 'Prueba actualizada',
+      branch: 'León',
+      stock: 100,
+    }).expect(400);
+  assert.match(rejectedStockEdit.body.error, /no se permiten otros campos/i);
+  const deletedProduct = await request(app).delete(`/api/products/${productId}`)
+    .set(originHeader).expect(200);
+  assert.deepEqual(deletedProduct.body, { deleted: true, count: 1, origin: 'practice' });
+  const productsAfterDelete = await request(app).get('/api/products').expect(200);
+  assert.ok(productsAfterDelete.body.items.every((item) => item.id !== productId));
+
+  const invoice = await request(app).post('/api/invoices').set(originHeader).send({
+    supplier: 'Proveedor sintético para eliminar',
+    reference: 'DEMO-DELETE-001',
+    date: '2026-10-31',
+    amount: 25,
+  }).expect(201);
+  await request(app).delete(`/api/invoices/${invoice.body.item.id}`)
+    .set(originHeader).expect(200, { deleted: true, origin: 'practice' });
+  await request(app).get(`/api/invoices/${invoice.body.item.id}`).expect(404);
+
+  const complaint = await request(app).post('/api/complaints').set(originHeader).send({
+    branch: 'Zapopan',
+    customerName: 'Cliente sintético',
+    description: 'Caso de demostración para eliminar.',
+    category: 'Prueba',
+  }).expect(201);
+  await request(app).delete(`/api/complaints/${complaint.body.item.id}`)
+    .set(originHeader).expect(200, { deleted: true, origin: 'practice' });
+  await request(app).get(`/api/complaints/${complaint.body.item.id}`).expect(404);
+
+  const stockProduct = await request(app).post('/api/products').set(originHeader).send({
+    name: 'Producto sintético con historial',
+    category: 'Prueba',
+    branch: 'Zapopan',
+    stock: 0,
+  }).expect(201);
+  const postedInvoice = await request(app).post('/api/invoices').set(originHeader).send({
+    supplier: 'Proveedor sintético con movimiento',
+    reference: 'DEMO-DELETE-002',
+    date: '2026-10-31',
+    amount: 12.5,
+    branch: 'Zapopan',
+    items: [{
+      description: 'Producto sintético con historial',
+      quantity: 1,
+      unitPrice: 12.5,
+      productId: stockProduct.body.item.id,
+    }],
+  }).expect(201);
+  await request(app).post(`/api/invoices/${postedInvoice.body.item.id}/review`)
+    .set(originHeader)
+    .send({ decision: 'confirm', evidence: 'Revisión sintética para probar el movimiento.' })
+    .expect(200);
+  await request(app).patch(`/api/products/${stockProduct.body.item.id}`)
+    .set(originHeader)
+    .send({
+      name: 'Producto sintético actualizado con historial',
+      category: 'Prueba actualizada',
+      branch: 'Zapopan',
+    }).expect(200);
+  await request(app).patch(`/api/products/${stockProduct.body.item.id}`)
+    .set(originHeader)
+    .send({
+      name: 'Producto sintético actualizado con historial',
+      category: 'Prueba actualizada',
+      branch: 'León',
+    }).expect(409);
+  await request(app).delete(`/api/invoices/${postedInvoice.body.item.id}`)
+    .set(originHeader).expect(409);
+  await request(app).delete(`/api/products/${stockProduct.body.item.id}`)
+    .set(originHeader).expect(409);
+});
+
+test('public product updates and deletes stay disabled outside the evaluation mode', async () => {
+  const app = await createApp({ evaluationMode: false });
+  const productCount = (await request(app).get('/api/products').expect(200)).body.items.length;
+  await request(app).patch('/api/products/1').send({
+    name: 'Producto cambiado',
+    category: 'Prueba',
+    branch: 'Zapopan',
+  }).expect(403);
+  await request(app).delete('/api/products/1').expect(403);
+  assert.equal((await request(app).get('/api/products').expect(200)).body.items.length, productCount);
+});
+
+test('production evaluation mode serves and writes only isolated practice data without Entra', async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'rioclaro-public-production-'));
+  const environmentKeys = [
+    'NODE_ENV',
+    'RIOCLARO_DATA_FILE',
+    'RIOCLARO_EVALUATION_DATA_FILE',
+    'RIOCLARO_AUDIT_FILE',
+    'RIOCLARO_EVALUATION_AUDIT_FILE',
+    'FOUNDRY_CONVERSATIONS_FILE',
+    'RIOCLARO_EVALUATION_CONVERSATIONS_FILE',
+    'FOUNDRY_ENABLED',
+    'FOUNDRY_PROJECT_ENDPOINT',
+  ];
+  const previous = Object.fromEntries(environmentKeys.map((key) => [key, process.env[key]]));
+  const dataFile = path.join(directory, 'evaluation-data.json');
+  const auditFile = path.join(directory, 'evaluation-audit.json');
+  const conversationsFile = path.join(directory, 'evaluation-conversations.json');
+  Object.assign(process.env, {
+    NODE_ENV: 'production',
+    RIOCLARO_DATA_FILE: dataFile,
+    RIOCLARO_EVALUATION_DATA_FILE: dataFile,
+    RIOCLARO_AUDIT_FILE: auditFile,
+    RIOCLARO_EVALUATION_AUDIT_FILE: auditFile,
+    FOUNDRY_CONVERSATIONS_FILE: conversationsFile,
+    RIOCLARO_EVALUATION_CONVERSATIONS_FILE: conversationsFile,
+    FOUNDRY_ENABLED: 'false',
+  });
+  delete process.env.FOUNDRY_PROJECT_ENDPOINT;
+  try {
+    const app = await createApp({ evaluationMode: true });
+    const headers = { 'X-Forwarded-Proto': 'https' };
+    const status = await request(app).get('/api/security/status').set(headers).expect(200);
+    assert.equal(status.body.evaluationMode, true);
+    assert.equal(status.body.practiceWritesEnabled, false);
+
+    const products = await request(app).get('/api/products')
+      .set(headers).set('X-Data-Origin', 'operational').expect(200);
+    assert.equal(products.body.origin, 'practice');
+    const created = await request(app).post('/api/products').set(headers)
+      .set('X-Data-Origin', 'operational')
+      .send({
+        name: 'Producto demo público de producción',
+        category: 'Prueba',
+        branch: 'León',
+        stock: 4,
+      }).expect(201);
+    assert.equal(created.body.origin, 'practice');
+      const updated = await request(app).patch(`/api/products/${created.body.item.id}`)
+        .set(headers)
+        .send({
+          name: 'Producto demo público actualizado en producción',
+          category: 'Prueba actualizada',
+          branch: 'León',
+        }).expect(200);
+      assert.equal(updated.body.origin, 'practice');
+      assert.equal(updated.body.item.name, 'Producto demo público actualizado en producción');
+      assert.equal(updated.body.item.stock, 4);
+      await request(app).delete(`/api/products/${created.body.item.id}`)
+        .set(headers).expect(200, { deleted: true, count: 1, origin: 'practice' });
+      const productsAfterDelete = await request(app).get('/api/products')
+        .set(headers).expect(200);
+      assert.ok(productsAfterDelete.body.items.every((product) => product.id !== created.body.item.id));
+      await request(app).post('/api/chat').set(headers)
+        .send({ message: 'Consulta sintética' }).expect(503);
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});

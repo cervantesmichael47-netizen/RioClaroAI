@@ -446,6 +446,13 @@ test('security headers are set, and browser-origin CORS is not universal', async
     assert.equal(response.headers['x-powered-by'], undefined);
     assert.match(response.headers['content-security-policy'], /default-src 'self'/);
     assert.equal(response.headers['access-control-allow-origin'], undefined);
+    const preflight = await request(app).options('/api/products/1')
+      .set('Origin', 'https://app.example.test')
+      .set('Access-Control-Request-Method', 'PATCH')
+      .set('Access-Control-Request-Headers', 'content-type,x-data-origin')
+      .expect(204);
+    assert.equal(preflight.headers['access-control-allow-origin'], 'https://app.example.test');
+    assert.match(preflight.headers['access-control-allow-methods'], /\bPATCH\b/);
   } finally {
     if (previous === undefined) delete process.env.CORS_ALLOWED_ORIGINS;
     else process.env.CORS_ALLOWED_ORIGINS = previous;
