@@ -69,17 +69,79 @@ test('public endpoints identify their data origin; local practice writes are val
   await request(app).post('/api/documents').send({}).expect(404);
 });
 
-test('production APIs require a verified identity outside the isolated evaluation mode', async () => {
+test('production practice queries are public while operational queries still require Entra', async () => {
   const previousEnvironment = process.env.NODE_ENV;
   process.env.NODE_ENV = 'production';
   try {
     const app = await createApp();
     for (const route of ['/api/dashboard', '/api/products', '/api/invoices', '/api/sales', '/api/complaints']) {
-      await request(app).get(route).set('X-Forwarded-Proto', 'https').expect(401);
+      await request(app).get(route).set('X-Forwarded-Proto', 'https').expect(200);
+      await request(app).get(route).set('X-Forwarded-Proto', 'https')
+        .set('X-Data-Origin', 'operational').expect(401);
     }
+
+    await request(app).get('/api/products').set('X-Forwarded-Proto', 'https')
+      .set(auth('accountsPayable')).set('X-Data-Origin', 'operational').expect(403);
+
+    await request(app).post('/api/products').set('X-Forwarded-Proto', 'https')
+      .send({ name: 'Producto público', category: 'Prueba', branch: 'Guadalajara', stock: 1 })
+      .expect(401);
+    await request(app).post('/api/products').set('X-Forwarded-Proto', 'https')
+      .set('X-Data-Origin', 'operational')
+      .send({ name: 'Producto operativo público', category: 'Prueba', branch: 'Guadalajara', stock: 1 })
+      .expect(401);
+    await request(app).post('/api/invoices').set('X-Forwarded-Proto', 'https')
+      .send(validInvoice).expect(401);
+
+    await request(app).post('/api/complaints').set('X-Forwarded-Proto', 'https')
+      .send({
+        branch: 'Zapopan',
+        customerName: 'Cliente anónimo',
+        description: 'No debe registrarse sin autenticación.',
+        category: 'Entrega',
+      }).expect(401);
+    const complaint = await request(app).post('/api/complaints').set('X-Forwarded-Proto', 'https')
+      .set(auth('admin')).send({
+        branch: 'Zapopan',
+        customerName: 'Cliente autorizado',
+        description: 'Reclamación para validar los permisos de escritura.',
+        category: 'Entrega',
+      }).expect(201);
+    await request(app).post(`/api/complaints/${complaint.body.item.id}/status`)
+      .set('X-Forwarded-Proto', 'https').send({ status: 'resolved' }).expect(401);
+    await request(app).post(`/api/complaints/${complaint.body.item.id}/response`)
+      .set('X-Forwarded-Proto', 'https')
+      .send({ message: 'Respuesta pública.', humanApproved: true }).expect(401);
+    const unchangedComplaint = await request(app).get(`/api/complaints/${complaint.body.item.id}`)
+      .set('X-Forwarded-Proto', 'https').expect(200);
+    assert.equal(unchangedComplaint.body.item.status, 'pending');
+    assert.equal(unchangedComplaint.body.item.firstResponseAt, null);
   } finally {
     if (previousEnvironment === undefined) delete process.env.NODE_ENV;
     else process.env.NODE_ENV = previousEnvironment;
+  }
+});
+
+test('inventory and invoice queries work when Foundry is unavailable', async () => {
+  configureFoundry();
+  const app = await createApp({
+    foundryClient: async () => {
+      throw new Error('Foundry is unavailable.');
+    },
+    foundryConnectionCheck: async () => {
+      throw new Error('Foundry is unavailable.');
+    },
+  });
+
+  try {
+    const foundry = await request(app).post('/api/foundry/check').expect(200);
+    assert.equal(foundry.body.connected, false);
+    await request(app).get('/api/products').expect(200);
+    await request(app).get('/api/invoices').expect(200);
+    await request(app).get('/api/dashboard').expect(200);
+    await request(app).get('/api/complaints').expect(200);
+  } finally {
+    clearFoundry();
   }
 });
 

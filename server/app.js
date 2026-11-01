@@ -78,13 +78,13 @@ function rateLimitHandler(_request, response) {
 
 function getDataOrigin(request, response) {
   if (request.evaluationMode) return 'practice';
-  if (process.env.NODE_ENV === 'production' && !request.identity) {
-    response.status(401).json({ error: 'Inicia sesión con Microsoft Entra ID para consultar datos.' });
-    return null;
-  }
   const origin = request.get('x-data-origin') || 'practice';
   if (!['practice', 'operational'].includes(origin)) {
     response.status(400).json({ error: 'Selecciona un conjunto de datos válido.' });
+    return null;
+  }
+  if (origin === 'operational' && !request.identity) {
+    response.status(401).json({ error: 'Inicia sesión con Microsoft Entra ID para consultar datos operativos.' });
     return null;
   }
   return origin;
@@ -244,9 +244,13 @@ export function createApp({
       return requireRole(request, response, next);
     };
   };
-  function authorizeComplaintAccess(request, response, origin, branch = null) {
+  function authorizeComplaintAccess(request, response, origin, branch = null, requireAuthenticatedWrite = false) {
     if (origin === 'operational' && !request.identity) {
       response.status(401).json({ error: 'Inicia sesión con Microsoft Entra ID para consultar reclamaciones operativas.' });
+      return false;
+    }
+    if (requireAuthenticatedWrite && !request.identity && !practiceWritesEnabled && !evaluationMode) {
+      response.status(401).json({ error: 'Inicia sesión con Microsoft Entra ID para modificar reclamaciones.' });
       return false;
     }
     if (request.identity && !request.identity.roles.some((role) => complaintRoles.includes(role))) {
@@ -1027,7 +1031,7 @@ export function createApp({
     const origin = getDataOrigin(request, response);
     if (!origin) return;
     const { branch, customerName, description, category, contactChannel, contactValue } = request.body ?? {};
-    if (!authorizeComplaintAccess(request, response, origin, branch)) return;
+    if (!authorizeComplaintAccess(request, response, origin, branch, true)) return;
     const payload = {
       origin,
       branch,
@@ -1087,10 +1091,10 @@ export function createApp({
       || Object.keys(request.body ?? {}).some((key) => !['status', 'note'].includes(key))) {
       return response.status(400).json({ error: 'La nota de seguimiento debe ser texto de hasta 500 caracteres.' });
     }
-    if (!authorizeComplaintAccess(request, response, origin)) return;
+    if (!authorizeComplaintAccess(request, response, origin, null, true)) return;
     const existing = getComplaint(complaintId, origin);
     if (!existing) return response.status(404).json({ error: 'No se encontró la reclamación.' });
-    if (!authorizeComplaintAccess(request, response, origin, existing.branch)) return;
+    if (!authorizeComplaintAccess(request, response, origin, existing.branch, true)) return;
     const result = updateComplaintStatus({ complaintId, status, note, actor: request.identity?.userId ?? 'system', origin });
     if (result.error) return response.status(409).json({ error: result.error });
     response.json({ item: result.item, origin });
@@ -1107,10 +1111,10 @@ export function createApp({
       || Object.keys(request.body ?? {}).some((key) => !['message', 'humanApproved'].includes(key))) {
       return response.status(400).json({ error: 'Revisa la respuesta y confirma explícitamente su revisión humana.' });
     }
-    if (!authorizeComplaintAccess(request, response, origin)) return;
+    if (!authorizeComplaintAccess(request, response, origin, null, true)) return;
     const existing = getComplaint(complaintId, origin);
     if (!existing) return response.status(404).json({ error: 'No se encontró la reclamación.' });
-    if (!authorizeComplaintAccess(request, response, origin, existing.branch)) return;
+    if (!authorizeComplaintAccess(request, response, origin, existing.branch, true)) return;
     const result = addComplaintResponse({ complaintId, responder: request.identity?.userId ?? 'system', message: message.trim(), origin });
     if (result.error) return response.status(409).json({ error: result.error });
     response.json({ item: result.item, origin });
